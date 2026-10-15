@@ -1,0 +1,4 @@
+# Statistiques de langage GitHub (Linguist) : le cœur du projet est l'application Django en Python.
+# Les gabarits HTML et les styles sont exclus du calcul, sans effet sur le code ni sur Git.
+templates/** linguist-detectable=false
+static/** linguist-detectable=false
