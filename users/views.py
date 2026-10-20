@@ -8,7 +8,10 @@ from django.contrib.auth.models import User
 from django.contrib import messages
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from django.db.models import Sum, F
+from datetime import timedelta
+
+from django.db.models import Count, F, Q, Sum
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 
@@ -91,90 +94,86 @@ def logout_view(request):
 @login_required
 @permission_required('sales.view_sale', raise_exception=True)
 def dashboard_view(request):
-    """Vue du tableau de bord"""
+    """
+    Vue du tableau de bord.
+
+    Toutes les statistiques sont calculées en base par des agrégations
+    groupées : le nombre de requêtes ne dépend ni du nombre de jours
+    affichés ni du volume de ventes.
+    """
     from medications.models import Medication
-    from sales.models import Sale, Customer
-    
-    # Statistiques médicaments
-    total_medications = Medication.objects.count()
-    low_stock_count = Medication.objects.filter(quantity__lte=F('min_quantity')).count()
-    
-    # Statistiques ventes (aujourd'hui)
-    today = timezone.now().date()
-    today_sales = Sale.objects.filter(created_at__date=today, status='completee')
-    total_sales_today = today_sales.aggregate(total=Sum('total'))['total'] or 0
-    sales_count_today = today_sales.count()
-    
-    # Statistiques clients
-    total_customers = Customer.objects.count()
+    from sales.models import Sale, SaleItem, Customer
 
-    # --- Données pour les graphiques ---
-    from datetime import timedelta
-    from sales.models import SaleItem
+    today = timezone.localdate()
+    debut_semaine = today - timedelta(days=today.weekday())   # lundi de cette semaine
+    debut_mois = today.replace(day=1)
+    debut_7_jours = today - timedelta(days=6)
 
-    # 1) Évolution des ventes sur les 7 derniers jours
-    labels_jours = []
-    donnees_ventes = []
-    for i in range(6, -1, -1):
-        jour = today - timedelta(days=i)
-        total_jour = Sale.objects.filter(
-            created_at__date=jour, status='completee'
-        ).aggregate(total=Sum('total'))['total'] or 0
-        labels_jours.append(jour.strftime('%d/%m'))
-        donnees_ventes.append(float(total_jour))
+    # 1) Médicaments : total et alertes de stock, en une requête
+    stock = Medication.objects.aggregate(
+        total=Count('id'),
+        low=Count('id', filter=Q(quantity__lte=F('min_quantity'))),
+    )
 
-    # 2) Top 5 des médicaments les plus vendus (par quantité)
-    from django.db.models import Sum as SumAgg
+    # 2) Chiffre d'affaires par période (ventes complétées), en une requête
+    ventes_ok = Sale.objects.filter(status='completee')
+    ca = ventes_ok.aggregate(
+        jour=Sum('total', filter=Q(created_at__date=today)),
+        nb_jour=Count('id', filter=Q(created_at__date=today)),
+        semaine=Sum('total', filter=Q(created_at__date__gte=debut_semaine)),
+        mois=Sum('total', filter=Q(created_at__date__gte=debut_mois)),
+        total=Sum('total'),
+    )
+
+    # 3) Ventes des 7 derniers jours, groupées par jour, en une requête
+    par_jour = {
+        row['jour']: row
+        for row in ventes_ok.filter(created_at__date__gte=debut_7_jours)
+        .annotate(jour=TruncDate('created_at'))
+        .values('jour')
+        .annotate(montant=Sum('total'), nombre=Count('id'))
+    }
+    jours = [debut_7_jours + timedelta(days=i) for i in range(7)]
+    labels_jours = [jour.strftime('%d/%m') for jour in jours]
+    donnees_ventes = [float(par_jour.get(jour, {}).get('montant') or 0) for jour in jours]
+    recap_jours = [
+        {
+            'date': jour.strftime('%d/%m/%Y'),
+            'montant': float(par_jour.get(jour, {}).get('montant') or 0),
+            'nombre': par_jour.get(jour, {}).get('nombre', 0),
+        }
+        for jour in reversed(jours)  # plus récent en premier
+    ]
+
+    # 4) Top 5 des médicaments les plus vendus (par quantité)
     top_items = (
         SaleItem.objects
         .values('medication__name')
-        .annotate(qte=SumAgg('quantity'))
+        .annotate(qte=Sum('quantity'))
         .order_by('-qte')[:5]
     )
     labels_produits = [t['medication__name'] for t in top_items]
     donnees_produits = [int(t['qte']) for t in top_items]
 
-    # --- Cumuls du chiffre d'affaires par période (ventes complétées) ---
-    from datetime import timedelta as _td
-    ventes_ok = Sale.objects.filter(status='completee')
-
-    debut_semaine = today - _td(days=today.weekday())   # lundi de cette semaine
-    debut_mois = today.replace(day=1)
-
-    ca_jour = ventes_ok.filter(created_at__date=today).aggregate(t=Sum('total'))['t'] or 0
-    ca_semaine = ventes_ok.filter(created_at__date__gte=debut_semaine).aggregate(t=Sum('total'))['t'] or 0
-    ca_mois = ventes_ok.filter(created_at__date__gte=debut_mois).aggregate(t=Sum('total'))['t'] or 0
-    ca_total = ventes_ok.aggregate(t=Sum('total'))['t'] or 0
-
-    # Détail jour par jour des 7 derniers jours (pour le tableau récapitulatif)
-    recap_jours = []
-    for i in range(6, -1, -1):
-        jour = today - _td(days=i)
-        montant = ventes_ok.filter(created_at__date=jour).aggregate(t=Sum('total'))['t'] or 0
-        nb = ventes_ok.filter(created_at__date=jour).count()
-        recap_jours.append({
-            'date': jour.strftime('%d/%m/%Y'),
-            'montant': float(montant),
-            'nombre': nb,
-        })
-    recap_jours.reverse()  # plus récent en premier
+    # 5) Clients
+    total_customers = Customer.objects.count()
 
     context = {
-        'total_medications': total_medications,
-        'total_sales': sales_count_today,
-        'total_sales_amount': total_sales_today,
+        'total_medications': stock['total'],
+        'total_sales': ca['nb_jour'],
+        'total_sales_amount': ca['jour'] or 0,
         'total_customers': total_customers,
-        'low_stock_count': low_stock_count,
+        'low_stock_count': stock['low'],
         # graphiques (sérialisés par le filtre json_script dans le gabarit)
         'chart_sales_labels': labels_jours,
         'chart_sales_data': donnees_ventes,
         'chart_products_labels': labels_produits,
         'chart_products_data': donnees_produits,
         # cumuls par période
-        'ca_jour': ca_jour,
-        'ca_semaine': ca_semaine,
-        'ca_mois': ca_mois,
-        'ca_total': ca_total,
+        'ca_jour': ca['jour'] or 0,
+        'ca_semaine': ca['semaine'] or 0,
+        'ca_mois': ca['mois'] or 0,
+        'ca_total': ca['total'] or 0,
         'recap_jours': recap_jours,
     }
     return render(request, 'users/dashboard.html', context)

@@ -2,18 +2,20 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Q, ProtectedError
+from datetime import timedelta
+
+from django.db.models import F, Q, ProtectedError
+from django.utils import timezone
 from .models import Medication, Category, StockMovement
 from .forms import CategoryForm, MedicationForm, StockMovementForm
 from .stock import StockError, apply_movement
-from django.db.models import Sum # Non utilisé ici mais bonne pratique de l'avoir si besoin d'agrégation
 
 
 @login_required
 @permission_required('medications.view_medication', raise_exception=True)
 def medication_list(request):
     """Liste des médicaments avec recherche et filtres"""
-    medications = Medication.objects.all()
+    medications = Medication.objects.select_related('category')
     categories = Category.objects.all()
     
     # Recherche
@@ -30,13 +32,16 @@ def medication_list(request):
     if category_filter:
         medications = medications.filter(category_id=category_filter)
     
+    # Filtres de stock calculés en base (mêmes règles que is_low_stock,
+    # is_expired et is_expiring_soon) : le résultat reste un queryset.
     stock_filter = request.GET.get('stock', '')
+    today = timezone.localdate()
     if stock_filter == 'low':
-        medications = [m for m in medications if m.is_low_stock]
+        medications = medications.filter(quantity__lte=F('min_quantity'))
     elif stock_filter == 'expired':
-        medications = [m for m in medications if m.is_expired]
+        medications = medications.filter(expiry_date__lt=today)
     elif stock_filter == 'expiring':
-        medications = [m for m in medications if m.is_expiring_soon]
+        medications = medications.filter(expiry_date__gt=today, expiry_date__lte=today + timedelta(days=30))
     
     context = {
         'medications': medications,
