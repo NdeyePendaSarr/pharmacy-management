@@ -12,6 +12,9 @@ class UsersConfig(AppConfig):
         post_migrate.connect(sync_roles_handler, sender=self, dispatch_uid="users.sync_roles")
 
 
-def sync_roles_handler(sender, **kwargs):
+def sync_roles_handler(sender, apps=None, **kwargs):
     from .roles import sync_roles
-    sync_roles()
+    if apps is None:
+        sync_roles()
+    else:
+        sync_roles(apps)

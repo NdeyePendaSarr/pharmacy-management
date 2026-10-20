@@ -12,6 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from medications.models import Medication
+from medications.stock import StockError, apply_movement
 from .models import Customer, Prescription, Sale, SaleItem
 
 # Remise maximale autorisée à la caisse, en pourcentage.
@@ -169,6 +170,13 @@ def create_sale(user, data):
                 quantity=quantity,
                 unit_price=med.selling_price,
             )
+            try:
+                apply_movement(
+                    med, "sortie", quantity, user=user,
+                    reason=f"Vente #{sale.sale_number}", reference=sale.sale_number,
+                )
+            except StockError as e:
+                raise SaleError(str(e))
 
         if prescription_info:
             doctor_name, prescription_date = prescription_info

@@ -3,6 +3,8 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
 from django.db.models import Q, ProtectedError
 from .models import Medication, Category, StockMovement
+from .forms import StockMovementForm
+from .stock import StockError, apply_movement
 from django.db.models import Sum # Non utilisé ici mais bonne pratique de l'avoir si besoin d'agrégation
 
 
@@ -76,7 +78,7 @@ def medication_create(request):
                 dosage=request.POST.get('dosage'),
                 purchase_price=request.POST.get('purchase_price'),
                 selling_price=request.POST.get('selling_price'),
-                quantity=request.POST.get('quantity', 0),
+                quantity=0,
                 min_quantity=request.POST.get('min_quantity', 10),
                 expiry_date=request.POST.get('expiry_date'),
                 location=request.POST.get('location', ''),
@@ -85,6 +87,10 @@ def medication_create(request):
                 created_by=request.user,
             )
             
+            initial_quantity = int(request.POST.get('quantity') or 0)
+            if initial_quantity > 0:
+                apply_movement(medication, 'entrée', initial_quantity, user=request.user, reason="Stock initial")
+
             # Gérer l'image si présente
             if request.FILES.get('image'):
                 medication.image = request.FILES.get('image')
@@ -120,7 +126,6 @@ def medication_update(request, pk):
             medication.dosage = request.POST.get('dosage')
             medication.purchase_price = request.POST.get('purchase_price')
             medication.selling_price = request.POST.get('selling_price')
-            medication.quantity = request.POST.get('quantity')
             medication.min_quantity = request.POST.get('min_quantity')
             medication.expiry_date = request.POST.get('expiry_date')
             medication.location = request.POST.get('location', '')
@@ -264,26 +269,29 @@ def category_delete(request, pk):
 @login_required
 @permission_required('medications.add_stockmovement', raise_exception=True)
 def stock_movement_create(request, medication_pk):
-    """Créer un mouvement de stock"""
+    """Créer un mouvement de stock (seul moyen de modifier la quantité)."""
     medication = get_object_or_404(Medication, pk=medication_pk)
-    
-    if request.method == 'POST':
+    form = StockMovementForm(request.POST or None)
+
+    if request.method == 'POST' and form.is_valid():
         try:
-            StockMovement.objects.create(
-                medication=medication,
-                movement_type=request.POST.get('movement_type'),
-                quantity=int(request.POST.get('quantity')),
-                reason=request.POST.get('reason', ''),
-                reference=request.POST.get('reference', ''),
-                created_by=request.user,
+            apply_movement(
+                medication,
+                form.cleaned_data['movement_type'],
+                form.cleaned_data['quantity'],
+                user=request.user,
+                reason=form.cleaned_data['reason'],
+                reference=form.cleaned_data['reference'],
             )
+        except StockError as e:
+            form.add_error(None, str(e))
+        else:
             messages.success(request, 'Mouvement de stock enregistré avec succès ! ✅')
             return redirect('medication_detail', pk=medication.pk)
-        except Exception as e:
-            messages.error(request, f'Erreur : {str(e)}')
-    
+
     context = {
         'medication': medication,
+        'form': form,
         'movement_types': StockMovement.MOVEMENT_TYPES,
     }
     return render(request, 'medications/stock_movement_form.html', context)

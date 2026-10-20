@@ -157,21 +157,6 @@ class SaleItem(models.Model):
         # Calculer le sous-total
         self.subtotal = to_cents(Decimal(self.unit_price) * self.quantity)
         
-        # Mettre à jour le stock du médicament (si nouvelle ligne)
-        if not self.pk:
-            # StockMovement.save() décrémente déjà medication.quantity pour un
-            # mouvement de type 'sortie' : on ne le fait PAS ici aussi, sinon
-            # le stock est décrémenté deux fois pour une même vente.
-            from medications.models import StockMovement
-            StockMovement.objects.create(
-                medication=self.medication,
-                movement_type='sortie',
-                quantity=self.quantity,
-                reason=f"Vente #{self.sale.sale_number}",
-                reference=self.sale.sale_number,
-                created_by=self.sale.created_by
-            )
-        
         super().save(*args, **kwargs)
 
 
