@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pharmanps
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/pharmanps
+      # Clé factice, réservée à la CI.
+      SECRET_KEY: ci-only-4f9c2b7e1a8d6f3e0b5c9a2d7e4f1b8c6a3d0e9f2b5c8a1d4e7f0b3c6a9d2e5f8
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt
+
+      - name: Vérifications de déploiement
+        env:
+          DEBUG: "False"
+        run: python manage.py check --deploy --fail-level WARNING
+
+      - name: Aucune migration manquante
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Tests
+        env:
+          DEBUG: "True"
+        run: python manage.py test

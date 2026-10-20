@@ -19,8 +19,20 @@ class Category(models.Model):
         return self.name
 
 
+class MedicationQuerySet(models.QuerySet):
+    def not_expired(self):
+        """Médicaments dont la date de péremption n'est pas dépassée (vendables jusqu'à ce jour inclus)."""
+        return self.filter(expiry_date__gte=timezone.localdate())
+
+    def sellable(self):
+        """Ce que la caisse peut proposer : en stock et non périmé."""
+        return self.not_expired().filter(quantity__gt=0)
+
+
 class Medication(models.Model):
     """Modèle pour les médicaments"""
+
+    objects = MedicationQuerySet.as_manager()
     
     FORM_CHOICES = [
         ('comprimé', 'Comprimé'),
@@ -71,6 +83,9 @@ class Medication(models.Model):
         verbose_name = "Médicament"
         verbose_name_plural = "Médicaments"
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(condition=models.Q(quantity__gte=0), name='medication_quantity_not_negative'),
+        ]
     
     def __str__(self):
         return f"{self.name} ({self.dosage})"
@@ -83,12 +98,12 @@ class Medication(models.Model):
     @property
     def is_expired(self):
         """Vérifie si le médicament est périmé"""
-        return self.expiry_date < timezone.now().date()
+        return self.expiry_date < timezone.localdate()
     
     @property
     def is_expiring_soon(self):
         """Vérifie si le médicament expire dans moins de 30 jours"""
-        days_until_expiry = (self.expiry_date - timezone.now().date()).days
+        days_until_expiry = (self.expiry_date - timezone.localdate()).days
         return 0 < days_until_expiry <= 30
     
     @property
@@ -137,20 +152,29 @@ class Medication(models.Model):
 
 
 class StockMovement(models.Model):
-    """Historique des mouvements de stock"""
-    
+    """
+    Historique des mouvements de stock.
+
+    La quantité est toujours positive ; le sens (entrée ou sortie) vient du
+    type. Un mouvement ne s'enregistre que par medications.stock.apply_movement,
+    qui met à jour le stock dans la même transaction.
+    """
+
     MOVEMENT_TYPES = [
-        ('entrée', 'Entrée'),
-        ('sortie', 'Sortie'),
-        ('ajustement', 'Ajustement'),
-        ('retour', 'Retour'),
-        ('perte', 'Perte'),
-        ('périmé', 'Périmé'),
+        ('entrée', 'Entrée (réception)'),
+        ('retour', 'Retour client'),
+        ('ajustement_plus', 'Ajustement + (inventaire)'),
+        ('sortie', 'Sortie (vente)'),
+        ('perte', 'Perte / casse'),
+        ('périmé', 'Retrait périmé'),
+        ('ajustement_moins', 'Ajustement − (inventaire)'),
     ]
-    
+    INBOUND_TYPES = frozenset({'entrée', 'retour', 'ajustement_plus'})
+    OUTBOUND_TYPES = frozenset({'sortie', 'perte', 'périmé', 'ajustement_moins'})
+
     medication = models.ForeignKey(Medication, on_delete=models.CASCADE, related_name='movements', verbose_name="Médicament")
     movement_type = models.CharField(max_length=20, choices=MOVEMENT_TYPES, verbose_name="Type de mouvement")
-    quantity = models.IntegerField(verbose_name="Quantité")
+    quantity = models.PositiveIntegerField(verbose_name="Quantité")
     reason = models.TextField(blank=True, null=True, verbose_name="Raison/Justification")
     reference = models.CharField(max_length=100, blank=True, null=True, verbose_name="Référence", help_text="Numéro de bon, facture...")
     
@@ -161,21 +185,14 @@ class StockMovement(models.Model):
         verbose_name = "Mouvement de stock"
         verbose_name_plural = "Mouvements de stock"
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(condition=models.Q(quantity__gt=0), name='stockmovement_quantity_positive'),
+        ]
     
     def __str__(self):
         return f"{self.movement_type} - {self.medication.name} ({self.quantity})"
-    
-    def save(self, *args, **kwargs):
-        """Mise à jour automatique du stock lors de la sauvegarde"""
-        is_new = self.pk is None
-        
-        if is_new:
-            # Nouveau mouvement
-            if self.movement_type in ['entrée', 'retour', 'ajustement']:
-                self.medication.quantity += self.quantity
-            elif self.movement_type in ['sortie', 'perte', 'périmé']:
-                self.medication.quantity -= self.quantity
-            
-            self.medication.save()
-        
-        super().save(*args, **kwargs)
+
+    @property
+    def signed_quantity(self):
+        """Variation de stock produite par ce mouvement (+ entrée, − sortie)."""
+        return self.quantity if self.movement_type in self.INBOUND_TYPES else -self.quantity

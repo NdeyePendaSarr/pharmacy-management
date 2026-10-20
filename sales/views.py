@@ -1,40 +1,48 @@
 # Fichier: sales/views.py 
 
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
 from django.http import JsonResponse
-from django.db import transaction
+from django.views.decorators.http import require_POST
 from django.db.models import Q, Sum
-from .models import Sale, SaleItem, Customer
+from .models import Sale, Customer
+from . import services
+from .forms import CustomerForm
 from medications.models import Medication
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
+@permission_required('sales.add_sale', raise_exception=True)
 def pos_view(request):
     """Interface de Point de Vente (POS)"""
-    medications = Medication.objects.filter(quantity__gt=0)
+    # Seuls les médicaments en stock et non périmés sont proposés à la caisse.
+    medications = Medication.objects.sellable().select_related('category')
     customers = Customer.objects.all()
     
     context = {
         'medications': medications,
         'customers': customers,
+        'max_discount': services.MAX_DISCOUNT,
     }
     return render(request, 'sales/pos.html', context)
 
 
 @login_required
+@permission_required('sales.add_sale', raise_exception=True)
 def search_medication(request):
     """API de recherche de médicaments pour le POS"""
     query = request.GET.get('q', '')
     
     if query:
-        medications = Medication.objects.filter(
+        medications = Medication.objects.sellable().filter(
             Q(name__icontains=query) |
             Q(dci__icontains=query) |
-            Q(barcode__icontains=query),
-            quantity__gt=0
+            Q(barcode__icontains=query)
         )[:10]
         
         results = []
@@ -46,6 +54,7 @@ def search_medication(request):
                 'price': float(med.selling_price),
                 'quantity': med.quantity,
                 'image': med.image_display,
+                'requires_prescription': med.requires_prescription,
             })
         
         return JsonResponse({'results': results})
@@ -54,102 +63,37 @@ def search_medication(request):
 
 
 @login_required
+@permission_required('sales.add_sale', raise_exception=True)
+@require_POST
 def create_sale(request):
-    """Créer une vente (API de Finalisation)"""
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            items_data = data.get('items', [])
+    """Créer une vente (API de finalisation de la caisse)."""
+    try:
+        data = json.loads(request.body)
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({'success': False, 'message': "Requête invalide."}, status=400)
 
-            if not items_data:
-                return JsonResponse({
-                    'success': False,
-                    'message': "Le panier est vide."
-                }, status=400)
+    try:
+        sale = services.create_sale(request.user, data)
+    except services.SaleError as e:
+        # Message métier rédigé par nous : il peut être montré au vendeur.
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+    except Exception:
+        logger.exception("Échec inattendu lors de la création d'une vente")
+        return JsonResponse({
+            'success': False,
+            'message': "Une erreur inattendue est survenue. La vente n'a pas été enregistrée.",
+        }, status=500)
 
-            with transaction.atomic():
-                # 1) Regrouper les quantités demandées par médicament (au cas où
-                #    le même produit apparaîtrait deux fois dans le panier), afin
-                #    de valider le stock disponible de façon cumulative.
-                requested_quantities = {}
-                for item in items_data:
-                    try:
-                        qty = int(item['quantity'])
-                    except (TypeError, ValueError):
-                        raise ValueError("Quantité invalide dans le panier.")
-                    if qty <= 0:
-                        raise ValueError("Quantité invalide dans le panier.")
-                    med_id = item['medication_id']
-                    requested_quantities[med_id] = requested_quantities.get(med_id, 0) + qty
-
-                # 2) Verrouiller chaque médicament concerné et valider le stock
-                #    AVANT toute écriture, pour éviter la survente et les
-                #    conditions de course entre deux ventes simultanées.
-                medications_cache = {}
-                for med_id, total_qty in requested_quantities.items():
-                    medication = Medication.objects.select_for_update().get(id=med_id)
-                    if total_qty > medication.quantity:
-                        raise ValueError(
-                            f'Stock insuffisant pour "{medication.name}" '
-                            f'(disponible : {medication.quantity}, demandé : {total_qty}).'
-                        )
-                    medications_cache[str(med_id)] = medication
-
-                # 3) Créer la vente
-                sale = Sale.objects.create(
-                    customer_id=data.get('customer_id') if data.get('customer_id') else None,
-                    subtotal=data.get('subtotal', 0),
-                    discount_percentage=data.get('discount_percentage', 0),
-                    payment_method=data.get('payment_method'),
-                    amount_paid=data.get('amount_paid', 0),
-                    created_by=request.user,
-                    # Statut forcé à 'completee' lors de la finalisation
-                    status='completee',
-                )
-
-                # 4) Créer les lignes de vente (le stock est décrémenté dans StockMovement.save())
-                for item in items_data:
-                    medication = medications_cache[str(item['medication_id'])]
-                    SaleItem.objects.create(
-                        sale=sale,
-                        medication=medication,
-                        quantity=int(item['quantity']),
-                        unit_price=item['unit_price'],
-                    )
-
-                # 5) Mettre à jour le sous-total
-                sale.subtotal = sum(item.subtotal for item in sale.items.all())
-                sale.save()
-
-            return JsonResponse({
-                'success': True,
-                'sale_id': sale.id,
-                'sale_number': sale.sale_number,
-                'message': f'Vente #{sale.sale_number} créée avec succès !'
-            })
-
-        except Medication.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'message': "Un médicament du panier est introuvable."
-            }, status=400)
-
-        except ValueError as e:
-            return JsonResponse({
-                'success': False,
-                'message': str(e)
-            }, status=400)
-
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'message': str(e)
-            }, status=400)
-
-    return JsonResponse({'success': False}, status=400)
+    return JsonResponse({
+        'success': True,
+        'sale_id': sale.id,
+        'sale_number': sale.sale_number,
+        'message': f'Vente #{sale.sale_number} créée avec succès !'
+    })
 
 
 @login_required
+@permission_required('sales.view_sale', raise_exception=True)
 def sale_list(request):
     """Liste des ventes (Historique)"""
     # Filtrer UNIQUEMENT les ventes COMPLÉTÉES pour l'historique
@@ -181,6 +125,7 @@ def sale_list(request):
 
 
 @login_required
+@permission_required('sales.view_sale', raise_exception=True)
 def sale_detail(request, pk):
     """Détails d'une vente"""
     sale = get_object_or_404(Sale, pk=pk)
@@ -192,6 +137,7 @@ def sale_detail(request, pk):
 
 
 @login_required
+@permission_required('sales.view_sale', raise_exception=True)
 def sale_invoice(request, pk):
     """Générer une facture"""
     sale = get_object_or_404(Sale, pk=pk)
@@ -203,6 +149,7 @@ def sale_invoice(request, pk):
 
 
 @login_required
+@permission_required('sales.view_customer', raise_exception=True)
 def customer_list(request):
     """Liste des clients"""
     customers = Customer.objects.all()
@@ -223,30 +170,19 @@ def customer_list(request):
 
 
 @login_required
+@permission_required('sales.add_customer', raise_exception=True)
 def customer_create(request):
     """Créer un client"""
-    if request.method == 'POST':
-        try:
-            customer = Customer.objects.create(
-                first_name=request.POST.get('first_name'),
-                last_name=request.POST.get('last_name'),
-                phone=request.POST.get('phone'),
-                email=request.POST.get('email', ''),
-                address=request.POST.get('address', ''),
-                date_of_birth=request.POST.get('date_of_birth') or None,
-                customer_type=request.POST.get('customer_type', 'particulier'),
-                medical_conditions=request.POST.get('medical_conditions', ''),
-                credit_limit=request.POST.get('credit_limit', 0),
-            )
-            messages.success(request, f'Client "{customer.full_name}" créé avec succès !')
-            return redirect('customer_list')
-        except Exception as e:
-            messages.error(request, f'Erreur : {str(e)}')
-    
-    return render(request, 'sales/customer_form.html')
+    form = CustomerForm(request.POST or None, user=request.user)
+    if request.method == 'POST' and form.is_valid():
+        customer = form.save()
+        messages.success(request, f'Client "{customer.full_name}" créé avec succès !')
+        return redirect('customer_list')
+    return render(request, 'sales/customer_form.html', {'form': form})
 
 
 @login_required
+@permission_required('sales.view_customer', raise_exception=True)
 def customer_detail(request, pk):
     """Détails d'un client"""
     customer = get_object_or_404(Customer, pk=pk)
@@ -264,57 +200,21 @@ def customer_detail(request, pk):
     return render(request, 'sales/customer_detail.html', context)
 
 
-# -------------------------------------------------------------------------
-# Mise à jour de la logique de customer_update pour la modification (CRUD)
-# -------------------------------------------------------------------------
-
 @login_required
+@permission_required('sales.change_customer', raise_exception=True)
 def customer_update(request, pk):
     """Mise à jour du client existant"""
     customer = get_object_or_404(Customer, pk=pk)
-    
-    if request.method == 'POST':
-        try:
-            # Récupérer et mettre à jour les champs de l'objet customer
-            customer.first_name = request.POST.get('first_name')
-            customer.last_name = request.POST.get('last_name')
-            customer.phone = request.POST.get('phone')
-            customer.email = request.POST.get('email', '')
-            customer.address = request.POST.get('address', '')
-            
-            # Gérer le champ de date (peut être None)
-            date_of_birth_str = request.POST.get('date_of_birth')
-            customer.date_of_birth = date_of_birth_str if date_of_birth_str else None
-            
-            customer.customer_type = request.POST.get('customer_type', 'particulier')
-            customer.medical_conditions = request.POST.get('medical_conditions', '')
-            
-            # Gérer le champ numérique (DecimalField): s'assurer que c'est un nombre
-            credit_limit_str = request.POST.get('credit_limit')
-            try:
-                # Convertir en Decimal (ou float)
-                customer.credit_limit = float(credit_limit_str)
-            except (ValueError, TypeError):
-                customer.credit_limit = 0
-            
-            #Sauvegarder l'objet mis à jour dans la base de données
-            customer.save()
-            
-            messages.success(request, f'Client "{customer.full_name}" mis à jour avec succès !')
-            return redirect('customer_detail', pk=customer.pk)
-
-        except Exception as e:
-            # Gérer les erreurs de validation ou de base de données
-            messages.error(request, f'Erreur lors de la mise à jour : {str(e)}')
-            
-    # Pour la méthode GET (affichage initial avec pré-remplissage) ou en cas d'erreur POST
-    context = {
-        'customer': customer,
-    }
-    return render(request, 'sales/customer_form.html', context)
+    form = CustomerForm(request.POST or None, instance=customer, user=request.user)
+    if request.method == 'POST' and form.is_valid():
+        customer = form.save()
+        messages.success(request, f'Client "{customer.full_name}" mis à jour avec succès !')
+        return redirect('customer_detail', pk=customer.pk)
+    return render(request, 'sales/customer_form.html', {'form': form, 'customer': customer})
 
 
 @login_required
+@permission_required('sales.view_customer', raise_exception=True)
 def customer_sales(request, pk):
     """Vue pour lister TOUTES les ventes d'un client (implémentation minimale)"""
     customer = get_object_or_404(Customer, pk=pk)

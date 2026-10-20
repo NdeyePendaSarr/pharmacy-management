@@ -1,15 +1,21 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
-from django.db.models import Q, ProtectedError
+from django.db import transaction
+from datetime import timedelta
+
+from django.db.models import F, Q, ProtectedError
+from django.utils import timezone
 from .models import Medication, Category, StockMovement
-from django.db.models import Sum # Non utilisé ici mais bonne pratique de l'avoir si besoin d'agrégation
+from .forms import CategoryForm, MedicationForm, StockMovementForm
+from .stock import StockError, apply_movement
 
 
 @login_required
+@permission_required('medications.view_medication', raise_exception=True)
 def medication_list(request):
     """Liste des médicaments avec recherche et filtres"""
-    medications = Medication.objects.all()
+    medications = Medication.objects.select_related('category')
     categories = Category.objects.all()
     
     # Recherche
@@ -26,13 +32,16 @@ def medication_list(request):
     if category_filter:
         medications = medications.filter(category_id=category_filter)
     
+    # Filtres de stock calculés en base (mêmes règles que is_low_stock,
+    # is_expired et is_expiring_soon) : le résultat reste un queryset.
     stock_filter = request.GET.get('stock', '')
+    today = timezone.localdate()
     if stock_filter == 'low':
-        medications = [m for m in medications if m.is_low_stock]
+        medications = medications.filter(quantity__lte=F('min_quantity'))
     elif stock_filter == 'expired':
-        medications = [m for m in medications if m.is_expired]
+        medications = medications.filter(expiry_date__lt=today)
     elif stock_filter == 'expiring':
-        medications = [m for m in medications if m.is_expiring_soon]
+        medications = medications.filter(expiry_date__gt=today, expiry_date__lte=today + timedelta(days=30))
     
     context = {
         'medications': medications,
@@ -45,6 +54,7 @@ def medication_list(request):
 
 
 @login_required
+@permission_required('medications.view_medication', raise_exception=True)
 def medication_detail(request, pk):
     """Détails d'un médicament"""
     medication = get_object_or_404(Medication, pk=pk)
@@ -58,87 +68,47 @@ def medication_detail(request, pk):
 
 
 @login_required
+@permission_required('medications.add_medication', raise_exception=True)
 def medication_create(request):
-    """Créer un nouveau médicament"""
-    categories = Category.objects.all()
-    
-    if request.method == 'POST':
-        try:
-            medication = Medication.objects.create(
-                name=request.POST.get('name'),
-                dci=request.POST.get('dci'),
-                barcode=request.POST.get('barcode'),
-                category_id=request.POST.get('category'),
-                form=request.POST.get('form'),
-                dosage=request.POST.get('dosage'),
-                purchase_price=request.POST.get('purchase_price'),
-                selling_price=request.POST.get('selling_price'),
-                quantity=request.POST.get('quantity', 0),
-                min_quantity=request.POST.get('min_quantity', 10),
-                expiry_date=request.POST.get('expiry_date'),
-                location=request.POST.get('location', ''),
-                requires_prescription=request.POST.get('requires_prescription') == 'on',
-                description=request.POST.get('description', ''),
-                created_by=request.user,
-            )
-            
-            # Gérer l'image si présente
-            if request.FILES.get('image'):
-                medication.image = request.FILES.get('image')
-                medication.save()
-            
-            messages.success(request, f'Médicament "{medication.name}" créé avec succès ! ✅')
-            return redirect('medication_detail', pk=medication.pk)
-        
-        except Exception as e:
-            messages.error(request, f'Erreur lors de la création : {str(e)}')
-    
+    """Créer un nouveau médicament (le stock initial devient un mouvement d'entrée)."""
+    form = MedicationForm(request.POST or None, request.FILES or None)
+
+    if request.method == 'POST' and form.is_valid():
+        with transaction.atomic():
+            medication = form.save(commit=False)
+            medication.created_by = request.user
+            medication.quantity = 0
+            medication.save()
+            initial_quantity = form.cleaned_data.get('quantity') or 0
+            if initial_quantity:
+                apply_movement(medication, 'entrée', initial_quantity, user=request.user, reason="Stock initial")
+        messages.success(request, f'Médicament "{medication.name}" créé avec succès ! ✅')
+        return redirect('medication_detail', pk=medication.pk)
+
     context = {
-        'categories': categories,
+        'form': form,
+        'categories': Category.objects.all(),
         'form_choices': Medication.FORM_CHOICES,
     }
     return render(request, 'medications/medication_form.html', context)
 
 
 @login_required
+@permission_required('medications.change_medication', raise_exception=True)
 def medication_update(request, pk):
-    """Modifier un médicament"""
+    """Modifier la fiche d'un médicament (le stock ne change que par un mouvement)."""
     medication = get_object_or_404(Medication, pk=pk)
-    categories = Category.objects.all()
-    
-    if request.method == 'POST':
-        try:
-            medication.name = request.POST.get('name')
-            medication.dci = request.POST.get('dci')
-            medication.barcode = request.POST.get('barcode')
-            medication.category_id = request.POST.get('category')
-            medication.form = request.POST.get('form')
-            medication.dosage = request.POST.get('dosage')
-            medication.purchase_price = request.POST.get('purchase_price')
-            medication.selling_price = request.POST.get('selling_price')
-            medication.quantity = request.POST.get('quantity')
-            medication.min_quantity = request.POST.get('min_quantity')
-            medication.expiry_date = request.POST.get('expiry_date')
-            medication.location = request.POST.get('location', '')
-            medication.requires_prescription = request.POST.get('requires_prescription') == 'on'
-            medication.description = request.POST.get('description', '')
-            
-            # Gérer l'image si présente
-            if request.FILES.get('image'):
-                medication.image = request.FILES.get('image')
-                medication.save()
-            
-            medication.save()
-            
-            messages.success(request, f'Médicament "{medication.name}" modifié avec succès ! ✅')
-            return redirect('medication_detail', pk=medication.pk)
-        
-        except Exception as e:
-            messages.error(request, f'Erreur lors de la modification : {str(e)}')
-    
+    form = MedicationForm(request.POST or None, request.FILES or None, instance=medication)
+
+    if request.method == 'POST' and form.is_valid():
+        medication = form.save()
+        messages.success(request, f'Médicament "{medication.name}" modifié avec succès ! ✅')
+        return redirect('medication_detail', pk=medication.pk)
+
     context = {
+        'form': form,
         'medication': medication,
-        'categories': categories,
+        'categories': Category.objects.all(),
         'form_choices': Medication.FORM_CHOICES,
         'is_update': True,
     }
@@ -146,6 +116,7 @@ def medication_update(request, pk):
 
 
 @login_required
+@permission_required('medications.delete_medication', raise_exception=True)
 def medication_delete(request, pk):
     """Supprimer un médicament"""
     medication = get_object_or_404(Medication, pk=pk)
@@ -171,6 +142,7 @@ def medication_delete(request, pk):
 
 
 @login_required
+@permission_required('medications.view_category', raise_exception=True)
 def category_list(request):
     """Liste des catégories"""
     categories = Category.objects.all()
@@ -189,43 +161,29 @@ def category_list(request):
 
 
 @login_required
+@permission_required('medications.add_category', raise_exception=True)
 def category_create(request):
     """Créer une catégorie"""
-    if request.method == 'POST':
-        try:
-            category = Category.objects.create(
-                name=request.POST.get('name'),
-                description=request.POST.get('description', ''),
-            )
-            messages.success(request, f'Catégorie "{category.name}" créée avec succès ! ✅')
-            return redirect('category_list')
-        except Exception as e:
-            messages.error(request, f'Erreur : {str(e)}')
-    
-    return render(request, 'medications/category_form.html')
+    form = CategoryForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        category = form.save()
+        messages.success(request, f'Catégorie "{category.name}" créée avec succès ! ✅')
+        return redirect('category_list')
+    return render(request, 'medications/category_form.html', {'form': form})
 
 
-# ✅ NOUVELLE VUE DE MODIFICATION
 @login_required
+@permission_required('medications.change_category', raise_exception=True)
 def category_update(request, pk):
     """Modifier une catégorie existante"""
     category = get_object_or_404(Category, pk=pk)
-    
-    if request.method == 'POST':
-        name = request.POST.get('name')
-        description = request.POST.get('description', '')
-        
-        if name:
-            category.name = name
-            category.description = description
-            category.save()
-            
-            messages.success(request, f'✅ Catégorie "{name}" modifiée avec succès !')
-            return redirect('category_list')
-        else:
-            messages.error(request, '❌ Le nom de la catégorie est obligatoire.')
-    
+    form = CategoryForm(request.POST or None, instance=category)
+    if request.method == 'POST' and form.is_valid():
+        category = form.save()
+        messages.success(request, f'✅ Catégorie "{category.name}" modifiée avec succès !')
+        return redirect('category_list')
     return render(request, 'medications/category_update.html', {
+        'form': form,
         'category': category,
         'title': 'Modifier la Catégorie',
         'action': 'update'
@@ -234,6 +192,7 @@ def category_update(request, pk):
 
 # ✅ NOUVELLE VUE DE SUPPRESSION
 @login_required
+@permission_required('medications.delete_category', raise_exception=True)
 def category_delete(request, pk):
     """Supprimer une catégorie"""
     category = get_object_or_404(Category, pk=pk)
@@ -253,27 +212,31 @@ def category_delete(request, pk):
     })
 
 @login_required
+@permission_required('medications.add_stockmovement', raise_exception=True)
 def stock_movement_create(request, medication_pk):
-    """Créer un mouvement de stock"""
+    """Créer un mouvement de stock (seul moyen de modifier la quantité)."""
     medication = get_object_or_404(Medication, pk=medication_pk)
-    
-    if request.method == 'POST':
+    form = StockMovementForm(request.POST or None)
+
+    if request.method == 'POST' and form.is_valid():
         try:
-            StockMovement.objects.create(
-                medication=medication,
-                movement_type=request.POST.get('movement_type'),
-                quantity=int(request.POST.get('quantity')),
-                reason=request.POST.get('reason', ''),
-                reference=request.POST.get('reference', ''),
-                created_by=request.user,
+            apply_movement(
+                medication,
+                form.cleaned_data['movement_type'],
+                form.cleaned_data['quantity'],
+                user=request.user,
+                reason=form.cleaned_data['reason'],
+                reference=form.cleaned_data['reference'],
             )
+        except StockError as e:
+            form.add_error(None, str(e))
+        else:
             messages.success(request, 'Mouvement de stock enregistré avec succès ! ✅')
             return redirect('medication_detail', pk=medication.pk)
-        except Exception as e:
-            messages.error(request, f'Erreur : {str(e)}')
-    
+
     context = {
         'medication': medication,
+        'form': form,
         'movement_types': StockMovement.MOVEMENT_TYPES,
     }
     return render(request, 'medications/stock_movement_form.html', context)

@@ -19,6 +19,9 @@ python manage.py migrate
 echo "👤 Création du compte admin (si absent)..."
 python manage.py init_admin
 
+echo "🧪 Création du compte de démonstration Vendeur (si absent)..."
+python manage.py init_demo
+
 echo "🌱 Remplissage des données de démo (si base vide)..."
 python manage.py seed_data
 

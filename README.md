@@ -1,50 +1,14 @@
 # 💊 PharmaNPS-Alou — Gestion de pharmacie
 
-> Application web de gestion d'une pharmacie couvrant le **stock des médicaments**, les **ventes**, les **clients**, la **facturation** et le **suivi de l'activité commerciale**.
+[![CI](https://github.com/NdeyePendaSarr/pharmacy-management/actions/workflows/ci.yml/badge.svg)](https://github.com/NdeyePendaSarr/pharmacy-management/actions/workflows/ci.yml)
 
-Le projet a été développé avec **Django** et déployé sur **Render** avec une base de données **PostgreSQL**.
+> Application web de gestion d'une pharmacie : **stock des médicaments**, **caisse**, **clients**, **ordonnances**, **facturation** et **suivi de l'activité commerciale**.
 
-L'objectif est de proposer une application permettant de centraliser les principales opérations quotidiennes d'une pharmacie dans une même interface.
+Développée avec **Django 5.2** et **PostgreSQL**, déployée sur **Render**. Le projet met l'accent sur l'exactitude des règles métier : un prix, un stock ou un encours de crédit ne peut pas être faussé depuis le navigateur, et chaque règle est couverte par un test automatisé.
 
 > **🔗 Démo en ligne : [PharmaNPS-Alou](https://pharmanps-aloucoding-b8ex.onrender.com/)**
-
----
-
-## 🎯 Présentation du projet
-
-Une pharmacie doit gérer simultanément plusieurs types d'informations :
-
-- les médicaments disponibles ;
-- les quantités en stock ;
-- les mouvements de stock ;
-- les ventes ;
-- les clients ;
-- les paiements ;
-- les factures ;
-- les alertes de stock ;
-- les indicateurs commerciaux.
-
-PharmaNPS-Alou regroupe ces différents besoins dans une application web unique.
-
-Le projet met particulièrement l'accent sur la **cohérence entre les ventes et le stock**.
-
-Lorsqu'un médicament est vendu, le système peut notamment :
-
-```text
-Vente
-  ↓
-Création des lignes de vente
-  ↓
-Décrémentation du stock
-  ↓
-Création du mouvement de stock
-  ↓
-Mise à jour des indicateurs
-  ↓
-Génération de la facture
-```
-
-Cette logique permet d'éviter que les différentes parties de l'application fonctionnent indépendamment les unes des autres.
+> Compte de démonstration au rôle **Vendeur** : identifiant `demo`, mot de passe communiqué sur demande.
+> Toutes les données de la démo (médicaments, clients, ventes, ordonnances) sont **fictives**.
 
 ---
 
@@ -64,278 +28,99 @@ Cette logique permet d'éviter que les différentes parties de l'application fon
 
 ---
 
+## 🔐 Comptes et rôles
+
+L'inscription publique est **fermée** : les comptes sont créés par un administrateur. Deux groupes sont définis dans le code ([`users/roles.py`](users/roles.py)) et recréés après chaque `migrate`.
+
+| Action | Pharmacien | Vendeur |
+|---|:---:|:---:|
+| Caisse, ventes, factures | ✅ | ✅ |
+| Consulter médicaments, catégories, clients | ✅ | ✅ |
+| Créer ou modifier un médicament, un prix, une catégorie | ✅ | ❌ |
+| Mouvements de stock (entrée, perte, ajustement…) | ✅ | ❌ |
+| Créer ou modifier une fiche client | ✅ | ❌ |
+| Voir les conditions médicales et la date de naissance | ✅ | ❌ |
+| Supprimer quoi que ce soit | ✅ | ❌ |
+
+- Les permissions sont vérifiées **dans chaque vue** (`permission_required`), pas seulement dans les gabarits : un Vendeur qui appelle directement l'URL de modification d'un médicament reçoit une erreur 403.
+- Un compte sans groupe peut se connecter mais n'a accès à rien.
+- Après **5 échecs de connexion** pour un même identifiant depuis une même adresse IP, ce couple est bloqué 15 minutes (django-axes).
+- La déconnexion se fait uniquement en `POST`.
+
+---
+
 ## ✨ Fonctionnalités
 
-### 🔐 Authentification
+### 💊 Médicaments
+Nom, DCI, code-barres unique, catégorie, forme galénique, dosage, prix d'achat et de vente, seuil d'alerte, date de péremption, emplacement, image (Cloudinary). Formulaires validés côté serveur : prix strictement positifs, prix de vente au moins égal au prix d'achat, date de péremption valide.
 
-L'application dispose d'un système d'authentification permettant de :
+Filtres de la liste : stock faible, périmés, bientôt périmés (30 jours).
 
-- créer un compte ;
-- se connecter ;
-- se déconnecter ;
-- accéder à un tableau de bord personnel.
+### 📦 Stock
+Le stock ne change **que par un mouvement**, toujours tracé :
 
-Les fonctionnalités de gestion sont accessibles aux utilisateurs authentifiés.
+| Augmente le stock | Diminue le stock |
+|---|---|
+| Entrée (réception) | Sortie (vente) |
+| Retour client | Perte / casse |
+| Ajustement + (inventaire) | Retrait périmé |
+| | Ajustement − (inventaire) |
 
----
+La quantité d'un mouvement est toujours positive, le sens vient de son type. Un mouvement qui ferait passer le stock sous zéro est refusé. La quantité n'est pas modifiable depuis la fiche du médicament : à la création, le stock initial est enregistré comme une entrée.
 
-### 💊 Gestion des médicaments
+### 🛒 Caisse
+- Recherche instantanée par nom, DCI ou code-barres ; les médicaments **périmés** ou épuisés ne sont pas proposés.
+- Remise de 0 à 20 % ; paiement en espèces (monnaie rendue calculée), carte, mobile money ou **crédit**.
+- Médicament **sur ordonnance** : la vente exige un client et une ordonnance (médecin, date de prescription), enregistrée et liée à la vente.
+- Facture imprimable.
 
-Chaque médicament peut être décrit avec plusieurs informations :
-
-- nom ;
-- DCI (Dénomination Commune Internationale) ;
-- code-barres unique ;
-- catégorie ;
-- forme galénique ;
-- dosage ;
-- prix d'achat ;
-- prix de vente ;
-- quantité en stock ;
-- seuil d'alerte ;
-- date de péremption ;
-- image.
-
-Les médicaments sont organisés par catégories afin de faciliter leur gestion.
-
----
-
-### 📦 Gestion du stock
-
-L'application conserve l'historique des mouvements de stock.
-
-Les différents types de mouvements pris en compte sont notamment :
-
-- entrée ;
-- sortie ;
-- perte ;
-- produit périmé ;
-- ajustement.
-
-Un `StockMovement` permet de conserver une trace des modifications effectuées sur le stock.
-
-La logique métier assure également la mise à jour automatique de la quantité disponible.
-
----
-
-### 🛒 Point de vente (POS)
-
-Le module de vente permet de réaliser une vente directement depuis l'application.
-
-Fonctionnalités principales :
-
-- recherche instantanée des médicaments ;
-- ajout de produits au panier ;
-- gestion de plusieurs lignes ;
-- calcul automatique du total ;
-- calcul de la monnaie à rendre ;
-- application d'une remise ;
-- sélection du mode de paiement ;
-- génération d'une facture.
-
-La vente est également liée à la gestion du stock.
-
----
-
-### 👥 Gestion des clients
-
-Les clients peuvent être enregistrés avec différentes informations.
-
-Le système distingue notamment :
-
-- particulier ;
-- entreprise ;
-- assurance.
-
-Le module prend également en charge :
-
-- les points de fidélité ;
-- le crédit client ;
-- les coordonnées du client ;
-- l'association entre client et vente.
-
----
+### 👥 Clients
+Particulier, entreprise ou assurance ; coordonnées, limite de crédit et encours. Les données médicales ne sont visibles que par un Pharmacien.
 
 ### 📊 Tableau de bord
-
-Le tableau de bord fournit une vision synthétique de l'activité.
-
-Il permet notamment de consulter :
-
-- le chiffre d'affaires du jour ;
-- le chiffre d'affaires de la semaine ;
-- le chiffre d'affaires du mois ;
-- le chiffre d'affaires total ;
-- les ventes récentes ;
-- les produits les plus vendus ;
-- les alertes de stock faible.
-
-Des graphiques **Chart.js** permettent notamment de visualiser :
-
-- les ventes des 7 derniers jours ;
-- le top 5 des produits vendus.
+Chiffre d'affaires du jour, de la semaine, du mois et total, ventes des 7 derniers jours, top 5 des produits vendus et alertes de stock (graphiques Chart.js).
 
 ---
 
-## 🧠 Logique métier
+## 🧠 Règles métier
 
-Une partie importante du projet concerne la cohérence entre les différents modules.
-
-### Vente et stock
-
-Lorsqu'une vente est enregistrée :
+### Une vente est calculée par le serveur
+Le navigateur n'envoie que des intentions : quels médicaments, combien, quelle remise, quel mode de paiement. Le service [`sales/services.py`](sales/services.py) fait le reste dans **une seule transaction** :
 
 ```text
-Sale
- │
- ├── SaleItem
- │     │
- │     ├── Médicament
- │     └── Quantité vendue
- │
- ├── Calcul du total
- │
- └── Mise à jour du stock
-        │
-        └── StockMovement
+Verrouillage des médicaments (SELECT … FOR UPDATE)
+  → refus si périmé, stock insuffisant ou ordonnance manquante
+  → prix lus en base, totaux recalculés en Decimal, remise bornée
+  → contrôle du paiement (espèces suffisantes, crédit disponible)
+  → vente, lignes de vente, mouvements de sortie, ordonnance
 ```
 
-Un `SaleItem` décrémente le stock du médicament correspondant et crée également un mouvement de stock.
+Si une étape échoue, rien n'est enregistré. Un message d'erreur inattendu n'est jamais renvoyé au navigateur : il est journalisé côté serveur.
 
-Cela permet de conserver une trace de l'opération.
+### Stock sans course
+Toute écriture du stock passe par [`medications/stock.py`](medications/stock.py) : verrou sur la ligne, contrôle « jamais sous zéro », mise à jour avec `F()`. Deux ventes simultanées du dernier article ne peuvent pas réussir toutes les deux. La base impose aussi `stock ≥ 0` et `quantité de mouvement > 0` (contraintes `CHECK`).
 
----
+### Paiements
+- **Espèces** : refusé si le montant remis est inférieur au total ; monnaie = montant remis − total.
+- **Carte, mobile money** : le montant encaissé est le total.
+- **Crédit** : client obligatoire ; la vente est refusée si elle dépasse le crédit disponible ; l'encours du client est mis à jour dans la même transaction.
 
-### Contrôle du stock disponible
-
-L'application vérifie également qu'une vente ne dépasse pas la quantité disponible.
-
-Exemple :
-
-```text
-Stock disponible : 5
-Quantité demandée : 8
-
-        ↓
-
-Vente refusée
-```
-
-Cette règle évite qu'une vente fasse passer le stock à une quantité incohérente.
-
----
-
-### Numérotation des ventes
-
-Chaque vente possède un numéro généré automatiquement selon un format similaire à :
-
-```text
-VYYYYMMDDxxxx
-```
-
-Exemple :
-
-```text
-V202603150001
-```
-
-Cela permet d'identifier facilement une vente et de retrouver sa facture.
+### Numéro de vente et bénéfice
+Le numéro est dérivé de l'identifiant de la vente (`V20261020-000123`) : il reste unique même si deux ventes sont enregistrées au même instant. Chaque ligne de vente garde le **prix d'achat du moment** : le bénéfice d'une vente passée ne change pas si le prix d'achat évolue ensuite.
 
 ---
 
 ## 🗃️ Modèles de données
 
-### Application `medications`
-
-#### `Category`
-
-Représente une catégorie de médicaments.
-
-Principales informations :
-
-- nom ;
-- description.
-
-#### `Medication`
-
-Représente un médicament.
-
-Principales informations :
-
-- nom ;
-- DCI ;
-- code-barres ;
-- catégorie ;
-- forme ;
-- dosage ;
-- prix d'achat ;
-- prix de vente ;
-- stock ;
-- seuil d'alerte ;
-- date de péremption ;
-- image.
-
-#### `StockMovement`
-
-Trace les mouvements effectués sur le stock.
-
-Types de mouvements :
-
-```text
-Entrée
-Sortie
-Perte
-Périmé
-Ajustement
-```
-
----
-
-### Application `sales`
-
-#### `Customer`
-
-Représente un client.
-
-Le modèle prend notamment en charge :
-
-- coordonnées ;
-- type de client ;
-- fidélité ;
-- crédit.
-
-#### `Sale`
-
-Représente une vente.
-
-Le modèle gère notamment :
-
-- numéro de vente ;
-- remise ;
-- mode de paiement ;
-- statut ;
-- total ;
-- monnaie.
-
-#### `SaleItem`
-
-Représente une ligne de vente.
-
-Il permet de relier :
-
-```text
-Vente
-  ↕
-Médicament
-```
-
-et de gérer la quantité vendue.
-
-#### `Prescription`
-
-Représente une ordonnance associée à un client et éventuellement à une vente.
-
-> Le modèle existe dans l'application mais son intégration dans l'interface utilisateur reste à finaliser. Il est actuellement principalement accessible depuis l'administration Django.
+| Application | Modèle | Rôle |
+|---|---|---|
+| `medications` | `Category` | Catégorie de médicaments |
+| | `Medication` | Médicament, prix, stock (≥ 0), péremption |
+| | `StockMovement` | Historique des variations de stock |
+| `sales` | `Customer` | Client, crédit, données médicales |
+| | `Sale` | Vente : numéro, remise, paiement, totaux |
+| | `SaleItem` | Ligne de vente : quantité, prix de vente et coût d'achat figés |
+| | `Prescription` | Ordonnance liée à un client et à une vente |
 
 ---
 
@@ -343,373 +128,138 @@ Représente une ordonnance associée à un client et éventuellement à une vent
 
 | Couche | Technologie |
 |---|---|
-| Backend | **Django 5.2.7** |
-| Langage | **Python** |
-| Base de données production | **PostgreSQL** |
-| Base de données développement | **SQLite** |
-| Frontend | **Django Templates** |
-| CSS | **Tailwind CSS** |
-| Graphiques | **Chart.js** |
-| Stockage des médias | **Cloudinary** |
-| Fichiers statiques | **WhiteNoise** |
-| Serveur d'application | **Gunicorn** |
-| Hébergement | **Render** |
+| Backend | **Django 5.2** (Python 3.13) |
+| Base de données | **PostgreSQL** (SQLite possible en développement) |
+| Frontend | Gabarits Django, **Tailwind CSS**, **Chart.js** |
+| Sécurité | Rôles par permissions Django, **django-axes**, HTTPS/HSTS |
+| Médias | **Cloudinary** |
+| Fichiers statiques | **WhiteNoise** (compression, noms par empreinte) |
+| Tests et CI | Tests Django, **GitHub Actions** avec PostgreSQL |
+| Hébergement | **Render** (Gunicorn) |
 
 ---
 
-## 🏗️ Architecture du projet
+## 🏗️ Organisation du code
 
 ```text
-pharmanps-alou/
-│
-├── pharmanps_alou/
-│   ├── settings.py
-│   ├── urls.py
-│   └── wsgi.py
-│
-├── users/
-│   └── Authentification et tableau de bord
-│
-├── medications/
-│   ├── Médicaments
-│   ├── Catégories
-│   ├── Stock
-│   └── management/
-│       └── commands/
-│           └── seed_data.py
-│
-├── sales/
-│   ├── Point de vente
-│   ├── Ventes
-│   ├── Clients
-│   └── Ordonnances
-│
-├── templates/
-│   ├── base
-│   ├── medications
-│   ├── sales
-│   └── users
-│
-├── static/
-│   ├── CSS
-│   └── ressources locales
-│
-├── build.sh
-├── render.yaml
-├── requirements.txt
-└── manage.py
+pharmanps_alou/        Réglages, URL, lanceur de tests, outils de test partagés
+users/                 Connexion, tableau de bord, rôles (roles.py), init_admin, init_demo
+medications/           Médicaments, catégories, formulaires
+  stock.py             Seul point d'écriture du stock
+  management/commands/seed_data.py
+sales/                 Caisse, ventes, clients, ordonnances, formulaires
+  services.py          Création d'une vente (calculs, contrôles, transaction)
+templates/             Interface (dont 403, partials/form_errors.html)
+.github/workflows/     Intégration continue
+build.sh, render.yaml  Déploiement sur Render
 ```
+
+Chaque application a un dossier `tests/`.
 
 ---
 
-## 📂 Responsabilité des principales applications
+## 🧪 Tests et intégration continue
 
-| Module | Responsabilité |
+**83 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
+
+| Domaine | Ce qui est vérifié |
 |---|---|
-| `users` | Authentification et tableau de bord |
-| `medications` | Médicaments, catégories et stock |
-| `sales` | Ventes, panier, clients et ordonnances |
-| `templates` | Interface utilisateur |
-| `static` | Ressources statiques |
-| `build.sh` | Préparation et déploiement sur Render |
+| Prix et totaux | Prix falsifié ignoré, montants exacts en Decimal, remise hors limites refusée, total jamais négatif, quantités entières > 0, aucune fuite de message d'erreur interne |
+| Accès | Inscription fermée, 403 pour un Vendeur sur la modification ou la suppression d'un médicament, données médicales masquées, compte sans rôle bloqué, déconnexion en POST, compte de démonstration idempotent |
+| XSS | Un médicament nommé `</script><script>alert(1)</script>` s'affiche comme du texte au tableau de bord et à la caisse |
+| Périmés et ordonnances | Périmé absent de la caisse et refusé par le serveur, client et ordonnance exigés, ordonnance liée à la vente |
+| Stock | Sortie supérieure au stock refusée, ajustements dans les deux sens, historique égal au stock, **deux ventes et deux sorties simultanées** (fils d'exécution concurrents sur PostgreSQL) |
+| Ventes | Numéros uniques en concurrence, monnaie, espèces insuffisantes, crédit (client, plafond, encours), coût d'achat figé |
+| Formulaires | Prix, quantités, code-barres unique, dates, catégorie en double, champs sensibles non modifiables sans permission |
+| Réglages | Stockages de production, `check --deploy` sans avertissement, verrouillage après 5 échecs de connexion |
+| Performance | Tableau de bord en 9 requêtes, quel que soit le volume (`assertNumQueries`) |
 
-Cette organisation permet de séparer les différentes responsabilités fonctionnelles de l'application.
+Les tests de concurrence nécessitent PostgreSQL ; ils sont ignorés avec SQLite.
 
 ---
 
 ## 🚀 Installation locale
 
-### 1. Cloner le dépôt
-
 ```bash
-git clone https://github.com/NdeyePendaSarr/pharmanps-aloucoding.git
-cd pharmanps-aloucoding
-```
-
-### 2. Créer un environnement virtuel
-
-Sous Linux / macOS :
-
-```bash
+git clone https://github.com/NdeyePendaSarr/pharmacy-management.git
+cd pharmacy-management
 python -m venv venv
-source venv/bin/activate
-```
-
-Sous Windows :
-
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
-
-### 3. Installer les dépendances
-
-```bash
+source venv/bin/activate        # Windows : venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 4. Configurer les variables d'environnement
-
-Créer un fichier `.env` à la racine :
+Créer un fichier `.env` à la racine (lu par python-decouple) :
 
 ```dotenv
-SECRET_KEY=change-me
+SECRET_KEY=une-cle-locale-longue-et-aleatoire
 DEBUG=True
+# Facultatif : sans DATABASE_URL, la base est un fichier SQLite local.
+DATABASE_URL=postgres://utilisateur:motdepasse@localhost:5432/pharmanps
 ```
 
-Pour une configuration PostgreSQL locale, ajouter également la configuration correspondante.
-
-### 5. Appliquer les migrations
-
 ```bash
-python manage.py migrate
-```
-
-### 6. Charger les données de démonstration
-
-```bash
-python manage.py seed_data
-```
-
-La commande est conçue pour être **idempotente**.
-
-### 7. Créer un administrateur
-
-```bash
+python manage.py migrate          # crée aussi les groupes Pharmacien et Vendeur
 python manage.py createsuperuser
-```
-
-### 8. Lancer le serveur
-
-```bash
+python manage.py seed_data        # données de démonstration fictives (base vide uniquement)
 python manage.py runserver
+python manage.py test             # 83 tests
 ```
 
-L'application sera disponible sur :
-
-```text
-http://127.0.0.1:8000/
-```
+La feuille de style `static/css/output.css` est générée par Tailwind CSS à partir de `static/css/input.css` (voir `build.sh`).
 
 ---
 
 ## 🌍 Déploiement sur Render
 
-L'application est déployée sur **Render** avec :
-
-- un service web Django ;
-- une base PostgreSQL ;
-- Cloudinary pour le stockage des médias.
-
-Le fichier :
+`render.yaml` décrit le service web et la base PostgreSQL. À chaque déploiement, `build.sh` exécute :
 
 ```text
-render.yaml
+pip install → Tailwind CSS → collectstatic → migrate (+ groupes)
+→ init_admin → init_demo → seed_data
 ```
 
-contient la configuration du service.
+Les trois commandes d'initialisation sont **idempotentes** : relancées, elles ne créent ni doublon ni incohérence. `seed_data` ne fait rien si la base contient déjà des médicaments.
+
+| Variable | Rôle |
+|---|---|
+| `SECRET_KEY`, `DEBUG=False`, `DATABASE_URL` | Réglages Django |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Stockage des médias |
+| `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Superutilisateur créé par `init_admin` |
+| `DEMO_USERNAME`, `DEMO_PASSWORD` | Compte de démonstration Vendeur créé par `init_demo` |
+| `ALLOW_REGISTRATION` | `False` par défaut ; `True` rouvre l'inscription publique (comptes sans rôle) |
 
 ---
 
-### Script de build
+## ⚠️ Limites connues
 
-À chaque déploiement, `build.sh` exécute notamment les différentes étapes nécessaires au démarrage de l'application :
-
-```text
-Installation des dépendances
-        ↓
-Compilation de Tailwind CSS
-        ↓
-collectstatic
-        ↓
-Migrations Django
-        ↓
-Initialisation de l'administrateur
-        ↓
-Chargement des données de démonstration
-```
-
-Les commandes d'initialisation sont conçues pour être **idempotentes**, afin de pouvoir être exécutées plusieurs fois sans créer de données incohérentes.
-
----
-
-### Variables d'environnement
-
-Les principales variables nécessaires au déploiement sont :
-
-```dotenv
-SECRET_KEY=
-DEBUG=False
-DATABASE_URL=
-CLOUDINARY_CLOUD_NAME=
-CLOUDINARY_API_KEY=
-CLOUDINARY_API_SECRET=
-ADMIN_USERNAME=
-ADMIN_EMAIL=
-ADMIN_PASSWORD=
-```
-
----
-
-## ☁️ Stockage des médias
-
-Les images des médicaments peuvent être stockées avec **Cloudinary**.
-
-L'application prévoit également un mécanisme de repli vers des ressources statiques locales lorsqu'une image distante n'est pas disponible.
-
-```text
-Image médicament
-      │
-      ▼
-Cloudinary
-      │
-      └── indisponible
-             ↓
-       Image locale
-```
-
----
-
-## 🧪 Qualité & tests
-
-Plusieurs scénarios métier ont été vérifiés directement avec le shell Django.
-
-Les contrôles réalisés comprennent notamment :
-
-- suppression d'un médicament déjà vendu ;
-- tentative de vente dépassant le stock disponible ;
-- réalisation d'une vente normale ;
-- panier contenant plusieurs lignes du même produit ;
-- cohérence des mouvements de stock ;
-- calcul des montants de vente.
-
-Les problèmes identifiés lors de ces vérifications ont été corrigés puis testés à nouveau.
-
----
-
-## ⚠️ État actuel du projet
-
-Le projet couvre actuellement les principales fonctionnalités nécessaires à la gestion quotidienne d'une pharmacie :
-
-```text
-Authentification
-      ↓
-Gestion des médicaments
-      ↓
-Gestion du stock
-      ↓
-Point de vente
-      ↓
-Clients
-      ↓
-Facturation
-      ↓
-Tableau de bord
-```
-
-Certaines fonctionnalités restent cependant à approfondir, notamment l'intégration complète des ordonnances et l'automatisation de certains tests.
-
----
+- Les **points de fidélité** sont enregistrés et affichés, mais aucune règle ne les attribue encore.
+- Le statut de vente « annulée » existe, mais il n'y a pas encore de parcours d'annulation ni de remise en stock.
+- Les listes (médicaments, ventes, clients) ne sont pas paginées.
 
 ## 🔮 Pistes d'amélioration
 
-### 📋 Ordonnances
-
-Finaliser l'intégration du modèle `Prescription` :
-
-- vues ;
-- URLs ;
-- templates ;
-- création et consultation depuis l'interface ;
-- association avec les ventes.
-
-### 📄 Pagination
-
-Ajouter une pagination sur les listes :
-
-- médicaments ;
-- ventes ;
-- clients.
-
-### 📦 Filtres de stock
-
-Ajouter des filtres dédiés :
-
-- stock faible ;
-- produits périmés ;
-- produits bientôt périmés.
-
-Une partie de ces filtres pourrait être directement effectuée avec l'ORM Django plutôt qu'après récupération des données.
-
-### 🧪 Tests automatisés
-
-Renforcer la couverture de tests sur les règles métier critiques :
-
-- calcul du stock ;
-- ventes ;
-- mouvements de stock ;
-- impossibilité de vendre au-delà du stock ;
-- calcul des totaux ;
-- gestion des remises ;
-- fidélité ;
-- crédit client.
-
-### 🧹 Maintenance
-
-Nettoyer et regrouper certains scripts de maintenance présents à la racine du projet :
-
-```text
-populate_db.py
-check_duplicates.py
-compare_stats.py
-fix_encoding.py
-```
+- Annulation et remboursement d'une vente, avec mouvement de retour en stock et diminution de l'encours de crédit.
+- Règles d'attribution des points de fidélité.
+- Pagination des listes.
+- Règlement de l'encours de crédit d'un client depuis l'interface.
 
 ---
 
 ## 🎓 Compétences mises en pratique
 
-Ce projet m'a permis de mettre en pratique :
-
-- développement backend avec Django ;
-- conception d'applications web avec Python ;
-- modélisation de données relationnelles ;
-- utilisation de PostgreSQL ;
-- conception de modèles Django ;
-- gestion des relations entre entités ;
-- authentification ;
-- gestion des stocks ;
-- conception d'un point de vente ;
-- logique métier liée aux ventes ;
-- génération de factures ;
-- gestion des médias avec Cloudinary ;
-- création de tableaux de bord ;
-- visualisation de données avec Chart.js ;
-- gestion des migrations ;
-- déploiement avec Render ;
-- configuration d'un environnement de production ;
-- tests et vérification de scénarios métier.
+Django et PostgreSQL ; modélisation relationnelle et migrations de données ; transactions et verrouillage (`select_for_update`) ; contrôle d'accès par rôles ; prévention des failles XSS et de la falsification de montants ; validation de formulaires ; optimisation des requêtes (agrégations groupées) ; tests automatisés, y compris de concurrence ; intégration continue ; déploiement sur Render avec WhiteNoise et Cloudinary.
 
 ---
 
 ## 🔗 Liens
 
-**Application en ligne :**
-
-https://pharmanps-aloucoding-b8ex.onrender.com/
-
-**Dépôt GitHub :**
-
-https://github.com/NdeyePendaSarr/pharmanps-aloucoding
+- **Application en ligne :** https://pharmanps-aloucoding-b8ex.onrender.com/
+- **Dépôt GitHub :** https://github.com/NdeyePendaSarr/pharmacy-management
 
 ---
 
 ## 👩‍💻 Auteure
 
-**Ndeye Penda Sarr**
+**Ndeye Penda Sarr** — Développeuse Web Full-Stack · Business Intelligence & Data
 
-Développeuse Web Full-Stack · Business Intelligence & Data
-
----
-
-© 2025 Ndeye Penda Sarr
+© 2025–2026 Ndeye Penda Sarr

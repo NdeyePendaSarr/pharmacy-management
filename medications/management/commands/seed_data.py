@@ -1,7 +1,7 @@
 """
-Commande Django : remplit la base avec des données de démo réalistes.
-Version "management command" de populate_db.py — fonctionne en production
-(contrairement au script original bloqué en DEBUG).
+Commande Django : remplit la base avec des données de démonstration fictives.
+Les ventes et le stock passent par les mêmes services que l'application
+(prix lus en base, mouvements de stock, ordonnances).
 
 Idempotente : si des médicaments existent déjà, elle ne fait rien
 (évite les doublons à chaque déploiement).
@@ -11,14 +11,18 @@ Usage :  python manage.py seed_data
 from datetime import datetime, timedelta
 from decimal import Decimal
 from django.core.management.base import BaseCommand
-from medications.models import Category, Medication, StockMovement
-from sales.models import Customer, Sale, SaleItem
+from django.db import transaction
+from medications.models import Category, Medication
+from medications.stock import apply_movement
+from sales.models import Customer, Sale
+from sales import services
 from django.contrib.auth.models import User
 
 
 class Command(BaseCommand):
     help = "Remplit la base de données avec des données de démonstration."
 
+    @transaction.atomic
     def handle(self, *args, **options):
         # Protection anti-doublon : ne re-remplit pas si déjà peuplé
         if Medication.objects.exists():
@@ -60,10 +64,7 @@ class Command(BaseCommand):
         print("💊 Creation des medicaments...")
 
         # Obtenir l'utilisateur admin
-        try:
-            admin_user = User.objects.first()
-        except:
-            admin_user = None
+        admin_user = User.objects.filter(is_superuser=True).order_by('id').first()
 
         medications_data = [
             # Anti-asthmatiques (pour NPS !)
@@ -81,55 +82,55 @@ class Command(BaseCommand):
     
             # Antibiotiques
             {'name': 'Amoxicilline', 'dci': 'Amoxicilline', 'barcode': '3400930000010', 'category': 'Antibiotiques',
-             'form': 'comprime', 'dosage': '500mg', 'purchase_price': 150, 'selling_price': 250,
+             'form': 'comprimé', 'dosage': '500mg', 'purchase_price': 150, 'selling_price': 250,
              'quantity': 200, 'min_quantity': 30, 'location': 'Rayon B - Etagere 2', 'requires_prescription': True},
     
             {'name': 'Augmentin', 'dci': 'Amoxicilline + Acide clavulanique', 'barcode': '3400930000011', 'category': 'Antibiotiques',
-             'form': 'comprime', 'dosage': '1g', 'purchase_price': 350, 'selling_price': 550,
+             'form': 'comprimé', 'dosage': '1g', 'purchase_price': 350, 'selling_price': 550,
              'quantity': 150, 'min_quantity': 25, 'location': 'Rayon B - Etagere 2', 'requires_prescription': True},
     
             {'name': 'Ciprofloxacine', 'dci': 'Ciprofloxacine', 'barcode': '3400930000012', 'category': 'Antibiotiques',
-             'form': 'comprime', 'dosage': '500mg', 'purchase_price': 200, 'selling_price': 350,
+             'form': 'comprimé', 'dosage': '500mg', 'purchase_price': 200, 'selling_price': 350,
              'quantity': 100, 'min_quantity': 20, 'location': 'Rayon B - Etagere 3', 'requires_prescription': True},
     
             # Antalgiques
             {'name': 'Paracetamol', 'dci': 'Paracetamol', 'barcode': '3400930000020', 'category': 'Antalgiques',
-             'form': 'comprime', 'dosage': '500mg', 'purchase_price': 50, 'selling_price': 100,
+             'form': 'comprimé', 'dosage': '500mg', 'purchase_price': 50, 'selling_price': 100,
              'quantity': 500, 'min_quantity': 100, 'location': 'Rayon C - Etagere 1', 'requires_prescription': False},
     
             {'name': 'Doliprane', 'dci': 'Paracetamol', 'barcode': '3400930000021', 'category': 'Antalgiques',
-             'form': 'comprime', 'dosage': '1000mg', 'purchase_price': 75, 'selling_price': 150,
+             'form': 'comprimé', 'dosage': '1000mg', 'purchase_price': 75, 'selling_price': 150,
              'quantity': 400, 'min_quantity': 80, 'location': 'Rayon C - Etagere 1', 'requires_prescription': False},
     
             {'name': 'Ibuprofene', 'dci': 'Ibuprofene', 'barcode': '3400930000022', 'category': 'Anti-inflammatoires',
-             'form': 'comprime', 'dosage': '400mg', 'purchase_price': 100, 'selling_price': 200,
+             'form': 'comprimé', 'dosage': '400mg', 'purchase_price': 100, 'selling_price': 200,
              'quantity': 300, 'min_quantity': 50, 'location': 'Rayon C - Etagere 2', 'requires_prescription': False},
     
             {'name': 'Aspirine', 'dci': 'Acide acetylsalicylique', 'barcode': '3400930000023', 'category': 'Antalgiques',
-             'form': 'comprime', 'dosage': '500mg', 'purchase_price': 40, 'selling_price': 80,
+             'form': 'comprimé', 'dosage': '500mg', 'purchase_price': 40, 'selling_price': 80,
              'quantity': 600, 'min_quantity': 100, 'location': 'Rayon C - Etagere 2', 'requires_prescription': False},
     
             # Antipaludiques
             {'name': 'Coartem', 'dci': 'Artemether + Lumefantrine', 'barcode': '3400930000030', 'category': 'Antipaludiques',
-             'form': 'comprime', 'dosage': '20/120mg', 'purchase_price': 800, 'selling_price': 1200,
+             'form': 'comprimé', 'dosage': '20/120mg', 'purchase_price': 800, 'selling_price': 1200,
              'quantity': 120, 'min_quantity': 30, 'location': 'Rayon D - Etagere 1', 'requires_prescription': True},
     
             {'name': 'Malarone', 'dci': 'Atovaquone + Proguanil', 'barcode': '3400930000031', 'category': 'Antipaludiques',
-             'form': 'comprime', 'dosage': '250/100mg', 'purchase_price': 1500, 'selling_price': 2200,
+             'form': 'comprimé', 'dosage': '250/100mg', 'purchase_price': 1500, 'selling_price': 2200,
              'quantity': 80, 'min_quantity': 15, 'location': 'Rayon D - Etagere 1', 'requires_prescription': True},
     
             # Vitamines
             {'name': 'Vitamine C', 'dci': 'Acide ascorbique', 'barcode': '3400930000040', 'category': 'Vitamines',
-             'form': 'comprime', 'dosage': '500mg', 'purchase_price': 150, 'selling_price': 300,
+             'form': 'comprimé', 'dosage': '500mg', 'purchase_price': 150, 'selling_price': 300,
              'quantity': 200, 'min_quantity': 40, 'location': 'Rayon E - Etagere 1', 'requires_prescription': False},
     
             {'name': 'Multivitamines', 'dci': 'Complexe multivitamine', 'barcode': '3400930000041', 'category': 'Vitamines',
-             'form': 'comprime', 'dosage': '1 comprime/jour', 'purchase_price': 500, 'selling_price': 800,
+             'form': 'comprimé', 'dosage': '1 comprime/jour', 'purchase_price': 500, 'selling_price': 800,
              'quantity': 150, 'min_quantity': 30, 'location': 'Rayon E - Etagere 1', 'requires_prescription': False},
     
             # Antihistaminiques
             {'name': 'Cetirizine', 'dci': 'Cetirizine', 'barcode': '3400930000050', 'category': 'Antihistaminiques',
-             'form': 'comprime', 'dosage': '10mg', 'purchase_price': 100, 'selling_price': 200,
+             'form': 'comprimé', 'dosage': '10mg', 'purchase_price': 100, 'selling_price': 200,
              'quantity': 180, 'min_quantity': 35, 'location': 'Rayon F - Etagere 1', 'requires_prescription': False},
     
             {'name': 'Loratadine', 'dci': 'Loratadine', 'barcode': '3400930000051', 'category': 'Antihistaminiques',
@@ -138,11 +139,11 @@ class Command(BaseCommand):
     
             # Medicaments en stock faible (pour tester les alertes)
             {'name': 'Azithromycine', 'dci': 'Azithromycine', 'barcode': '3400930000060', 'category': 'Antibiotiques',
-             'form': 'comprime', 'dosage': '500mg', 'purchase_price': 400, 'selling_price': 650,
+             'form': 'comprimé', 'dosage': '500mg', 'purchase_price': 400, 'selling_price': 650,
              'quantity': 8, 'min_quantity': 20, 'location': 'Rayon B - Etagere 3', 'requires_prescription': True},
     
             {'name': 'Omeprazole', 'dci': 'Omeprazole', 'barcode': '3400930000070', 'category': 'Anti-inflammatoires',
-             'form': 'gelule', 'dosage': '20mg', 'purchase_price': 150, 'selling_price': 300,
+             'form': 'gélule', 'dosage': '20mg', 'purchase_price': 150, 'selling_price': 300,
              'quantity': 5, 'min_quantity': 15, 'location': 'Rayon G - Etagere 1', 'requires_prescription': False},
         ]
         medications = {}
@@ -162,7 +163,7 @@ class Command(BaseCommand):
                     'dosage': med_data['dosage'],
                     'purchase_price': Decimal(str(med_data['purchase_price'])),
                     'selling_price': Decimal(str(med_data['selling_price'])),
-                    'quantity': med_data['quantity'],
+                    'quantity': 0,
                     'min_quantity': med_data['min_quantity'],
                     'expiry_date': expiry_date,
                     'location': med_data['location'],
@@ -170,6 +171,10 @@ class Command(BaseCommand):
                     'created_by': admin_user,
                 }
             )
+            if created:
+                # Le stock initial est un mouvement d'entrée, comme dans l'application.
+                apply_movement(med, 'entrée', med_data['quantity'], user=admin_user,
+                               reason="Stock initial (données de démonstration)")
             medications[med_data['name']] = med
             print(f"  ✅ {med.name} - {med.dosage}")
 
@@ -255,77 +260,29 @@ class Command(BaseCommand):
         # 4. CREER DES VENTES
         print("🛒 Creation de ventes d'exemple...")
 
-        # Vente 1 : Asthme (Fatou)
-        sale1 = Sale.objects.create(
-            customer=customers[0],
-            payment_method='especes',
-            status='completee',
-            amount_paid=12000,
-            created_by=admin_user,
-        )
-        SaleItem.objects.create(
-            sale=sale1,
-            medication=medications['Ventoline'],
-            quantity=2,
-            unit_price=medications['Ventoline'].selling_price,
-        )
-        SaleItem.objects.create(
-            sale=sale1,
-            medication=medications['Cetirizine'],
-            quantity=1,
-            unit_price=medications['Cetirizine'].selling_price,
-        )
-        sale1.subtotal = sum(item.subtotal for item in sale1.items.all())
-        sale1.save()
-        print(f"  ✅ Vente #{sale1.sale_number} - {sale1.total} FCFA")
-
-        # Vente 2 : Grippe (Amadou)
-        sale2 = Sale.objects.create(
-            customer=customers[1],
-            payment_method='carte',
-            status='completee',
-            amount_paid=0,
-            created_by=admin_user,
-        )
-        SaleItem.objects.create(
-            sale=sale2,
-            medication=medications['Paracetamol'],
-            quantity=3,
-            unit_price=medications['Paracetamol'].selling_price,
-        )
-        SaleItem.objects.create(
-            sale=sale2,
-            medication=medications['Vitamine C'],
-            quantity=2,
-            unit_price=medications['Vitamine C'].selling_price,
-        )
-        sale2.subtotal = sum(item.subtotal for item in sale2.items.all())
-        sale2.save()
-        print(f"  ✅ Vente #{sale2.sale_number} - {sale2.total} FCFA")
-
-        # Vente 3 : Paludisme (Client anonyme)
-        sale3 = Sale.objects.create(
-            customer=None,
-            payment_method='mobile_money',
-            status='completee',
-            amount_paid=0,
-            created_by=admin_user,
-        )
-        SaleItem.objects.create(
-            sale=sale3,
-            medication=medications['Coartem'],
-            quantity=1,
-            unit_price=medications['Coartem'].selling_price,
-        )
-        SaleItem.objects.create(
-            sale=sale3,
-            medication=medications['Doliprane'],
-            quantity=2,
-            unit_price=medications['Doliprane'].selling_price,
-        )
-        sale3.subtotal = sum(item.subtotal for item in sale3.items.all())
-        sale3.save()
-        print(f"  ✅ Vente #{sale3.sale_number} - {sale3.total} FCFA")
+        # Les ventes passent par le même service que la caisse : prix lus en
+        # base, stock décrémenté par un mouvement, ordonnance si nécessaire.
+        prescription = {'doctor_name': 'Dr Aminata Fall', 'prescription_date': today.isoformat()}
+        demo_sales = [
+            # Vente 1 : Asthme (Fatou) — Ventoline sur ordonnance
+            {'customer': customers[0], 'payment_method': 'especes', 'amount_paid': 12000,
+             'items': [('Ventoline', 2), ('Cetirizine', 1)], 'prescription': prescription},
+            # Vente 2 : Grippe (Amadou)
+            {'customer': customers[1], 'payment_method': 'carte',
+             'items': [('Paracetamol', 3), ('Vitamine C', 2)]},
+            # Vente 3 : Paludisme — Coartem sur ordonnance, donc client identifié
+            {'customer': customers[2], 'payment_method': 'mobile_money',
+             'items': [('Coartem', 1), ('Doliprane', 2)], 'prescription': prescription},
+        ]
+        for demo in demo_sales:
+            sale = services.create_sale(admin_user, {
+                'customer_id': demo['customer'].id,
+                'payment_method': demo['payment_method'],
+                'amount_paid': demo.get('amount_paid', 0),
+                'items': [{'medication_id': medications[name].id, 'quantity': qty} for name, qty in demo['items']],
+                'prescription': demo.get('prescription'),
+            })
+            print(f"  ✅ Vente #{sale.sale_number} - {sale.total} FCFA")
 
         print(f"\n✅ 3 ventes crees\n")
 

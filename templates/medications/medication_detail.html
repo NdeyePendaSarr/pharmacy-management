@@ -213,15 +213,21 @@
                 </div>
 
                 <div class="space-y-3 md:space-y-4">
+                    {% if perms.medications.add_stockmovement %}
                     <a href="{% url 'stock_movement_create' medication.pk %}" class="block w-full bg-white hover:bg-gray-100 text-blue-600 px-4 py-3 md:px-6 md:py-4 rounded-xl md:rounded-2xl font-bold text-center transition-all transform hover:scale-105 shadow-lg text-sm md:text-base">
                         <i class="fas fa-exchange-alt mr-2"></i>Mouvement stock
                     </a>
+                    {% endif %}
+                    {% if perms.medications.change_medication %}
                     <a href="{% url 'medication_update' medication.pk %}" class="block w-full bg-green-500 hover:bg-green-600 text-white px-4 py-3 md:px-6 md:py-4 rounded-xl md:rounded-2xl font-bold text-center transition-all transform hover:scale-105 shadow-lg text-sm md:text-base">
                         <i class="fas fa-edit mr-2"></i>Modifier
                     </a>
+                    {% endif %}
+                    {% if perms.medications.delete_medication %}
                     <a href="{% url 'medication_delete' medication.pk %}" class="block w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 md:px-6 md:py-4 rounded-xl md:rounded-2xl font-bold text-center transition-all transform hover:scale-105 shadow-lg text-sm md:text-base">
                         <i class="fas fa-trash mr-2"></i>Supprimer
                     </a>
+                    {% endif %}
                 </div>
             </div>
         </div>

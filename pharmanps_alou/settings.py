@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 from decouple import config
 import dj_database_url
@@ -49,6 +50,9 @@ INSTALLED_APPS = [
     'cloudinary_storage',
     'cloudinary',
     
+    # Limitation des tentatives de connexion
+    'axes',
+
     # Nos apps
     'users',
     'medications',
@@ -64,6 +68,14 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Doit rester en dernier : transforme un verrouillage en page « trop de tentatives ».
+    'axes.middleware.AxesMiddleware',
+]
+
+AUTHENTICATION_BACKENDS = [
+    # Refuse la connexion d'un compte verrouillé, avant toute vérification du mot de passe.
+    'axes.backends.AxesStandaloneBackend',
+    'django.contrib.auth.backends.ModelBackend',
 ]
 
 ROOT_URLCONF = 'pharmanps_alou.urls'
@@ -150,8 +162,6 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Configuration WhiteNoise pour servir les fichiers statiques
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 
 # -------------------------------------------------------------
@@ -174,33 +184,62 @@ CLOUDINARY_STORAGE = {
     'API_SECRET': config('CLOUDINARY_API_SECRET', default=''),
 }
 
-# Si Cloudinary est configuré (production), l'utiliser
-# Sinon utiliser le stockage local (développement)
-if CLOUDINARY_STORAGE['CLOUD_NAME']:
-    # Production : Cloudinary
-    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-    MEDIA_URL = '/media/'  # Cloudinary gère l'URL
-else:
-    # Développement : Stockage local
-    MEDIA_URL = '/media/'
-    MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# Stockages (Django ≥ 4.2 ; STATICFILES_STORAGE et DEFAULT_FILE_STORAGE
+# ont été supprimés en 5.1 et seraient ignorés sans erreur).
+# - fichiers statiques : WhiteNoise, compressés et nommés par empreinte ;
+# - médias : Cloudinary si configuré (production), sinon disque local.
+# Les images des médicaments (CloudinaryField) sont envoyées directement par
+# le SDK Cloudinary ; ce stockage sert aux autres fichiers (ordonnances).
+STORAGES = {
+    "default": {
+        "BACKEND": (
+            "cloudinary_storage.storage.MediaCloudinaryStorage"
+            if CLOUDINARY_STORAGE['CLOUD_NAME']
+            else "django.core.files.storage.FileSystemStorage"
+        ),
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Inscription publique : fermée par défaut. Les comptes sont créés par un
+# administrateur (ou par init_admin / init_demo au déploiement).
+ALLOW_REGISTRATION = config('ALLOW_REGISTRATION', default=False, cast=bool)
+
 # Login/Logout URLs
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 
+# Limitation des tentatives de connexion (django-axes) : 5 échecs pour un
+# même couple identifiant + adresse IP bloquent ce couple 15 minutes.
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_TEMPLATE = 'users/lockout.html'
+AXES_CLIENT_IP_CALLABLE = 'users.security.client_ip'
+
+# Tests : fichiers statiques sans manifeste (pas de collectstatic préalable).
+TEST_RUNNER = 'pharmanps_alou.test_runner.TestRunner'
+
 # Security settings pour production
 if not DEBUG:
+    # Render termine le HTTPS et transmet la requête en HTTP avec ce
+    # en-tête : sans lui, SECURE_SSL_REDIRECT redirigerait en boucle.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
     SECURE_HSTS_SECONDS = 31536000

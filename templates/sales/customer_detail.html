@@ -41,9 +41,11 @@
         </div>
 
         <div class="absolute top-4 md:top-8 right-4 md:right-8">
+            {% if perms.sales.change_customer %}
             <a href="{% url 'customer_update' customer.pk %}" class="bg-white bg-opacity-20 backdrop-blur-lg hover:bg-opacity-30 text-white px-4 py-2 md:px-6 md:py-3 rounded-xl md:rounded-2xl font-bold transition-all transform hover:scale-105 shadow-lg border border-white border-opacity-30 text-sm md:text-base">
                 <i class="fas fa-edit mr-2"></i>Modifier
             </a>
+            {% endif %}
         </div>
     </div>
 
@@ -118,7 +120,7 @@
                         <p class="font-bold text-green-900 text-base md:text-lg break-all">{{ customer.email }}</p>
                     </div>
                     {% endif %}
-                    {% if customer.date_of_birth %}
+                    {% if customer.date_of_birth and perms.sales.view_sensitive_customer %}
                     <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-4 md:p-5">
                         <p class="text-xs md:text-sm text-purple-600 mb-2 font-semibold flex items-center">
                             <i class="fas fa-birthday-cake mr-2"></i>Date de naissance
@@ -137,7 +139,7 @@
                 {% endif %}
             </div>
 
-            {% if customer.medical_conditions %}
+            {% if customer.medical_conditions and perms.sales.view_sensitive_customer %}
             <div class="bg-gradient-to-br from-red-50 to-red-100 border-4 border-red-300 rounded-3xl p-6 md:p-8 shadow-xl">
                 <h3 class="text-xl md:text-2xl font-bold text-red-800 mb-4 flex items-center">
                     <i class="fas fa-heartbeat text-2xl md:text-3xl mr-3"></i>Conditions médicales importantes

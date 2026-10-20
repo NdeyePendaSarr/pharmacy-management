@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block title %}Trop de tentatives - PharmaNPS-Alou{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto mt-16 bg-white rounded-3xl shadow-xl p-10 text-center">
+    <div class="bg-orange-100 rounded-full w-20 h-20 mx-auto flex items-center justify-center mb-6">
+        <i class="fas fa-user-lock text-orange-600 text-3xl"></i>
+    </div>
+    <h1 class="text-2xl font-extrabold text-gray-900 mb-3">Trop de tentatives de connexion</h1>
+    <p class="text-gray-600 mb-8">
+        Par sécurité, ce compte est temporairement bloqué depuis votre connexion.
+        Réessayez dans 15 minutes ou contactez un administrateur.
+    </p>
+    <a href="{% url 'login' %}" class="inline-block bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl font-bold shadow-lg">
+        Retour à la connexion
+    </a>
+</div>
+{% endblock %}
