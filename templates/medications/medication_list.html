@@ -22,9 +22,11 @@
                     <a href="{% url 'category_list' %}" class="bg-white bg-opacity-20 backdrop-blur-lg hover:bg-opacity-30 text-white px-6 py-3 rounded-2xl font-bold transition-all transform hover:scale-105 shadow-lg border border-white border-opacity-30">
                         <i class="fas fa-tags mr-2"></i>Catégories
                     </a>
+                    {% if perms.medications.add_medication %}
                     <a href="{% url 'medication_create' %}" class="bg-white hover:bg-gray-100 text-green-600 px-6 py-3 rounded-2xl font-bold transition-all transform hover:scale-105 shadow-lg">
                         <i class="fas fa-plus mr-2"></i>Nouveau
                     </a>
+                    {% endif %}
                 </div>
             </div>
             
@@ -35,10 +37,12 @@
                     <span>Catégories</span>
                 </a>
                 
+                {% if perms.medications.add_medication %}
                 <a href="{% url 'medication_create' %}" class="flex-1 min-w-0 flex items-center justify-center bg-white hover:bg-gray-100 text-green-600 p-3 rounded-xl font-bold text-base transition-all transform hover:scale-105 shadow-lg">
                     <i class="fas fa-plus mr-2 text-xl"></i>
                     <span>Nouveau</span>
                 </a>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -195,12 +199,16 @@
                     <a href="{% url 'medication_detail' med.pk %}" class="flex-1 bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-3 rounded-xl font-bold text-center transition-all transform hover:scale-105" title="Détails">
                         <i class="fas fa-eye mr-2"></i>Voir
                     </a>
+                    {% if perms.medications.change_medication %}
                     <a href="{% url 'medication_update' med.pk %}" class="bg-green-100 hover:bg-green-200 text-green-700 px-4 py-3 rounded-xl font-bold transition-all transform hover:scale-105" title="Modifier">
                         <i class="fas fa-edit"></i>
                     </a>
+                    {% endif %}
+                    {% if perms.medications.delete_medication %}
                     <a href="{% url 'medication_delete' med.pk %}" class="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-3 rounded-xl font-bold transition-all transform hover:scale-105" title="Supprimer">
                         <i class="fas fa-trash"></i>
                     </a>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -210,9 +218,11 @@
     <div class="bg-white rounded-3xl shadow-xl p-16 text-center">
         <i class="fas fa-pills text-gray-300 text-8xl mb-6"></i>
         <p class="text-gray-500 text-xl mb-6">Aucun médicament trouvé</p>
+        {% if perms.medications.add_medication %}
         <a href="{% url 'medication_create' %}" class="inline-block bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-8 py-4 rounded-2xl font-bold transition-all transform hover:scale-105 shadow-lg">
             <i class="fas fa-plus mr-2"></i>Ajouter le premier médicament
         </a>
+        {% endif %}
     </div>
     {% endif %}
 </div>

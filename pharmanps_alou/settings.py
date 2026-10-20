@@ -190,6 +190,10 @@ else:
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Inscription publique : fermée par défaut. Les comptes sont créés par un
+# administrateur (ou par init_admin / init_demo au déploiement).
+ALLOW_REGISTRATION = config('ALLOW_REGISTRATION', default=False, cast=bool)
+
 # Login/Logout URLs
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'

@@ -1,6 +1,9 @@
+from django.conf import settings
+from django.http import Http404
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout, authenticate
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
+from django.views.decorators.http import require_POST
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.contrib.auth.password_validation import validate_password
@@ -27,11 +30,13 @@ def login_view(request):
         else:
             messages.error(request, 'Nom d\'utilisateur ou mot de passe incorrect.')
     
-    return render(request, 'users/login.html')
+    return render(request, 'users/login.html', {'allow_registration': settings.ALLOW_REGISTRATION})
 
 
 def register_view(request):
-    """Vue d'inscription"""
+    """Vue d'inscription (fermée sauf si ALLOW_REGISTRATION=True)"""
+    if not settings.ALLOW_REGISTRATION:
+        raise Http404("Inscription fermée")
     if request.user.is_authenticated:
         return redirect('dashboard')
     
@@ -75,7 +80,7 @@ def register_view(request):
     return render(request, 'users/register.html')
 
 
-@login_required
+@require_POST
 def logout_view(request):
     """Vue de déconnexion"""
     logout(request)
@@ -84,6 +89,7 @@ def logout_view(request):
 
 
 @login_required
+@permission_required('sales.view_sale', raise_exception=True)
 def dashboard_view(request):
     """Vue du tableau de bord"""
     from medications.models import Medication

@@ -1,7 +1,7 @@
 # Fichier: sales/views.py 
 
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @login_required
+@permission_required('sales.add_sale', raise_exception=True)
 def pos_view(request):
     """Interface de Point de Vente (POS)"""
     medications = Medication.objects.filter(quantity__gt=0)
@@ -29,6 +30,7 @@ def pos_view(request):
 
 
 @login_required
+@permission_required('sales.add_sale', raise_exception=True)
 def search_medication(request):
     """API de recherche de médicaments pour le POS"""
     query = request.GET.get('q', '')
@@ -58,6 +60,7 @@ def search_medication(request):
 
 
 @login_required
+@permission_required('sales.add_sale', raise_exception=True)
 @require_POST
 def create_sale(request):
     """Créer une vente (API de finalisation de la caisse)."""
@@ -87,6 +90,7 @@ def create_sale(request):
 
 
 @login_required
+@permission_required('sales.view_sale', raise_exception=True)
 def sale_list(request):
     """Liste des ventes (Historique)"""
     # Filtrer UNIQUEMENT les ventes COMPLÉTÉES pour l'historique
@@ -118,6 +122,7 @@ def sale_list(request):
 
 
 @login_required
+@permission_required('sales.view_sale', raise_exception=True)
 def sale_detail(request, pk):
     """Détails d'une vente"""
     sale = get_object_or_404(Sale, pk=pk)
@@ -129,6 +134,7 @@ def sale_detail(request, pk):
 
 
 @login_required
+@permission_required('sales.view_sale', raise_exception=True)
 def sale_invoice(request, pk):
     """Générer une facture"""
     sale = get_object_or_404(Sale, pk=pk)
@@ -140,6 +146,7 @@ def sale_invoice(request, pk):
 
 
 @login_required
+@permission_required('sales.view_customer', raise_exception=True)
 def customer_list(request):
     """Liste des clients"""
     customers = Customer.objects.all()
@@ -160,6 +167,7 @@ def customer_list(request):
 
 
 @login_required
+@permission_required('sales.add_customer', raise_exception=True)
 def customer_create(request):
     """Créer un client"""
     if request.method == 'POST':
@@ -184,6 +192,7 @@ def customer_create(request):
 
 
 @login_required
+@permission_required('sales.view_customer', raise_exception=True)
 def customer_detail(request, pk):
     """Détails d'un client"""
     customer = get_object_or_404(Customer, pk=pk)
@@ -206,6 +215,7 @@ def customer_detail(request, pk):
 # -------------------------------------------------------------------------
 
 @login_required
+@permission_required('sales.change_customer', raise_exception=True)
 def customer_update(request, pk):
     """Mise à jour du client existant"""
     customer = get_object_or_404(Customer, pk=pk)
@@ -252,6 +262,7 @@ def customer_update(request, pk):
 
 
 @login_required
+@permission_required('sales.view_customer', raise_exception=True)
 def customer_sales(request, pk):
     """Vue pour lister TOUTES les ventes d'un client (implémentation minimale)"""
     customer = get_object_or_404(Customer, pk=pk)

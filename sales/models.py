@@ -48,6 +48,9 @@ class Customer(models.Model):
         verbose_name = "Client"
         verbose_name_plural = "Clients"
         ordering = ['-created_at']
+        permissions = [
+            ("view_sensitive_customer", "Voir les données médicales et la date de naissance des clients"),
+        ]
     
     def __str__(self):
         return f"{self.first_name} {self.last_name}"

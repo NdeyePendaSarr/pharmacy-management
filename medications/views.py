@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
 from django.db.models import Q, ProtectedError
 from .models import Medication, Category, StockMovement
@@ -7,6 +7,7 @@ from django.db.models import Sum # Non utilisé ici mais bonne pratique de l'avo
 
 
 @login_required
+@permission_required('medications.view_medication', raise_exception=True)
 def medication_list(request):
     """Liste des médicaments avec recherche et filtres"""
     medications = Medication.objects.all()
@@ -45,6 +46,7 @@ def medication_list(request):
 
 
 @login_required
+@permission_required('medications.view_medication', raise_exception=True)
 def medication_detail(request, pk):
     """Détails d'un médicament"""
     medication = get_object_or_404(Medication, pk=pk)
@@ -58,6 +60,7 @@ def medication_detail(request, pk):
 
 
 @login_required
+@permission_required('medications.add_medication', raise_exception=True)
 def medication_create(request):
     """Créer un nouveau médicament"""
     categories = Category.objects.all()
@@ -101,6 +104,7 @@ def medication_create(request):
 
 
 @login_required
+@permission_required('medications.change_medication', raise_exception=True)
 def medication_update(request, pk):
     """Modifier un médicament"""
     medication = get_object_or_404(Medication, pk=pk)
@@ -146,6 +150,7 @@ def medication_update(request, pk):
 
 
 @login_required
+@permission_required('medications.delete_medication', raise_exception=True)
 def medication_delete(request, pk):
     """Supprimer un médicament"""
     medication = get_object_or_404(Medication, pk=pk)
@@ -171,6 +176,7 @@ def medication_delete(request, pk):
 
 
 @login_required
+@permission_required('medications.view_category', raise_exception=True)
 def category_list(request):
     """Liste des catégories"""
     categories = Category.objects.all()
@@ -189,6 +195,7 @@ def category_list(request):
 
 
 @login_required
+@permission_required('medications.add_category', raise_exception=True)
 def category_create(request):
     """Créer une catégorie"""
     if request.method == 'POST':
@@ -207,6 +214,7 @@ def category_create(request):
 
 # ✅ NOUVELLE VUE DE MODIFICATION
 @login_required
+@permission_required('medications.change_category', raise_exception=True)
 def category_update(request, pk):
     """Modifier une catégorie existante"""
     category = get_object_or_404(Category, pk=pk)
@@ -234,6 +242,7 @@ def category_update(request, pk):
 
 # ✅ NOUVELLE VUE DE SUPPRESSION
 @login_required
+@permission_required('medications.delete_category', raise_exception=True)
 def category_delete(request, pk):
     """Supprimer une catégorie"""
     category = get_object_or_404(Category, pk=pk)
@@ -253,6 +262,7 @@ def category_delete(request, pk):
     })
 
 @login_required
+@permission_required('medications.add_stockmovement', raise_exception=True)
 def stock_movement_create(request, medication_pk):
     """Créer un mouvement de stock"""
     medication = get_object_or_404(Medication, pk=medication_pk)

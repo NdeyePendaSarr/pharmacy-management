@@ -17,6 +17,12 @@ services:
         fromDatabase:
           name: pharmanps-db
           property: connectionString
+      # Compte de démonstration (rôle Vendeur), créé par init_demo au build.
+      # Le mot de passe se saisit dans le tableau de bord Render (sync: false).
+      - key: DEMO_USERNAME
+        value: demo
+      - key: DEMO_PASSWORD
+        sync: false
 
 databases:
   - name: pharmanps-db
