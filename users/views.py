@@ -109,7 +109,6 @@ def dashboard_view(request):
     total_customers = Customer.objects.count()
 
     # --- Données pour les graphiques ---
-    import json
     from datetime import timedelta
     from sales.models import SaleItem
 
@@ -166,11 +165,11 @@ def dashboard_view(request):
         'total_sales_amount': total_sales_today,
         'total_customers': total_customers,
         'low_stock_count': low_stock_count,
-        # graphiques (sérialisés en JSON pour le template)
-        'chart_sales_labels': json.dumps(labels_jours),
-        'chart_sales_data': json.dumps(donnees_ventes),
-        'chart_products_labels': json.dumps(labels_produits),
-        'chart_products_data': json.dumps(donnees_produits),
+        # graphiques (sérialisés par le filtre json_script dans le gabarit)
+        'chart_sales_labels': labels_jours,
+        'chart_sales_data': donnees_ventes,
+        'chart_products_labels': labels_produits,
+        'chart_products_data': donnees_produits,
         # cumuls par période
         'ca_jour': ca_jour,
         'ca_semaine': ca_semaine,

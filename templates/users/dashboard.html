@@ -291,9 +291,16 @@
 {% endblock %}
 
 {% block extra_js %}
+{# Données des graphiques : json_script échappe <, > et & (aucune injection possible). #}
+{{ chart_sales_labels|json_script:"chart-sales-labels" }}
+{{ chart_sales_data|json_script:"chart-sales-data" }}
+{{ chart_products_labels|json_script:"chart-products-labels" }}
+{{ chart_products_data|json_script:"chart-products-data" }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const readJson = (id) => JSON.parse(document.getElementById(id).textContent);
+
     // Palette cohérente avec le thème
     const indigo = '#6366f1';
     const green = '#10b981';
@@ -304,10 +311,10 @@ document.addEventListener('DOMContentLoaded', function () {
         new Chart(salesCtx, {
             type: 'line',
             data: {
-                labels: {{ chart_sales_labels|safe }},
+                labels: readJson('chart-sales-labels'),
                 datasets: [{
                     label: 'Ventes (FCFA)',
-                    data: {{ chart_sales_data|safe }},
+                    data: readJson('chart-sales-data'),
                     borderColor: indigo,
                     backgroundColor: 'rgba(99, 102, 241, 0.1)',
                     fill: true,
@@ -329,12 +336,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 2) Produits les plus vendus — camembert
     const productsCtx = document.getElementById('productsChart');
-    const productsData = {{ chart_products_data|safe }};
+    const productsData = readJson('chart-products-data');
     if (productsCtx && productsData.length > 0) {
         new Chart(productsCtx, {
             type: 'doughnut',
             data: {
-                labels: {{ chart_products_labels|safe }},
+                labels: readJson('chart-products-labels'),
                 datasets: [{
                     data: productsData,
                     backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'],
@@ -349,7 +356,10 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     } else if (productsCtx) {
-        productsCtx.parentElement.innerHTML = '<div class="h-full flex items-center justify-center text-gray-400">Pas encore de ventes à afficher</div>';
+        const empty = document.createElement('div');
+        empty.className = 'h-full flex items-center justify-center text-gray-400';
+        empty.textContent = 'Pas encore de ventes à afficher';
+        productsCtx.parentElement.replaceChildren(empty);
     }
 });
 </script>

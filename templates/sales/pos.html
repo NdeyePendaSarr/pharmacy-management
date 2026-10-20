@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}Point de Vente - PharmaNPS-Alou{% endblock %}
 
@@ -48,7 +49,7 @@
                     <div class="product-card group bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200 rounded-2xl p-4 cursor-pointer hover:shadow-2xl hover:border-blue-500 transition-all duration-300 transform hover:-translate-y-2" 
                          data-id="{{ med.id }}"
                          data-name="{{ med.name }}"
-                         data-price="{{ med.selling_price }}"
+                         data-price="{{ med.selling_price|unlocalize }}"
                          data-stock="{{ med.quantity }}">
                         {% if med.image_display %}
                         <img src="{{ med.image_display }}" alt="{{ med.name }}" class="w-full h-24 object-cover rounded-xl mb-3 group-hover:scale-110 transition-transform">
@@ -226,55 +227,70 @@
 </div>
 
 <script>
+// Toutes les données (noms, DCI, panier) sont insérées avec textContent :
+// un nom de médicament ne peut jamais devenir du HTML ou du JavaScript.
 let cart = [];
 let selectedPaymentMethod = 'especes';
 
-// Recherche de médicaments
 const searchInput = document.getElementById('searchInput');
 const searchResults = document.getElementById('searchResults');
+const formatFcfa = (amount) => `${Math.round(amount)} FCFA`;
+
+function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+}
+
+function icon(classes) {
+    return el('i', classes);
+}
+
+function renderSearchResult(med) {
+    const row = el('div', 'search-result-item flex items-center p-4 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 cursor-pointer border-b transition-all');
+    row.dataset.id = med.id;
+    row.dataset.name = med.name;
+    row.dataset.price = med.price;
+    row.dataset.stock = med.quantity;
+
+    const iconBox = el('div', 'w-14 h-14 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl flex items-center justify-center mr-4 shadow-lg');
+    iconBox.append(icon('fas fa-pills text-blue-600 text-xl'));
+
+    const names = el('div', 'flex-1');
+    names.append(el('p', 'font-bold text-gray-900', med.name), el('p', 'text-sm text-gray-500', med.dci));
+
+    const figures = el('div', 'text-right');
+    figures.append(
+        el('p', 'font-bold text-green-600 text-lg', formatFcfa(med.price)),
+        el('p', 'text-xs text-gray-500', `📦 Stock: ${med.quantity}`)
+    );
+
+    row.append(iconBox, names, figures);
+    row.addEventListener('click', () => addToCart(row));
+    return row;
+}
+
+function renderNoResult() {
+    const box = el('div', 'p-6 text-center text-gray-500');
+    box.append(icon('fas fa-search text-4xl mb-2 opacity-30'), el('p', '', 'Aucun résultat'));
+    return box;
+}
 
 searchInput.addEventListener('input', async (e) => {
     const query = e.target.value.trim();
-    
+
     if (query.length < 2) {
         searchResults.classList.add('hidden');
         return;
     }
-    
+
     try {
         const response = await fetch(`/api/search-medication/?q=${encodeURIComponent(query)}`);
         const data = await response.json();
-        
-        if (data.results.length > 0) {
-            searchResults.innerHTML = data.results.map(med => `
-                <div class="search-result-item flex items-center p-4 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 cursor-pointer border-b transition-all" 
-                     data-id="${med.id}" 
-                     data-name="${med.name}" 
-                     data-price="${med.price}" 
-                     data-stock="${med.quantity}">
-                    <div class="w-14 h-14 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl flex items-center justify-center mr-4 shadow-lg">
-                        <i class="fas fa-pills text-blue-600 text-xl"></i>
-                    </div>
-                    <div class="flex-1">
-                        <p class="font-bold text-gray-900">${med.name}</p>
-                        <p class="text-sm text-gray-500">${med.dci}</p>
-                    </div>
-                    <div class="text-right">
-                        <p class="font-bold text-green-600 text-lg">${med.price} FCFA</p>
-                        <p class="text-xs text-gray-500">📦 Stock: ${med.quantity}</p>
-                    </div>
-                </div>
-            `).join('');
-            searchResults.classList.remove('hidden');
-            
-            // Ajouter les événements
-            document.querySelectorAll('.search-result-item').forEach(item => {
-                item.addEventListener('click', () => addToCart(item));
-            });
-        } else {
-            searchResults.innerHTML = '<div class="p-6 text-center text-gray-500"><i class="fas fa-search text-4xl mb-2 opacity-30"></i><p>Aucun résultat</p></div>';
-            searchResults.classList.remove('hidden');
-        }
+        const nodes = data.results.length > 0 ? data.results.map(renderSearchResult) : [renderNoResult()];
+        searchResults.replaceChildren(...nodes);
+        searchResults.classList.remove('hidden');
     } catch (error) {
         console.error('Erreur:', error);
     }
@@ -296,11 +312,10 @@ function addToCart(element) {
     const id = element.dataset.id;
     const name = element.dataset.name;
     const price = parseFloat(element.dataset.price);
-    const stock = parseInt(element.dataset.stock);
-    
-    // Vérifier si déjà dans le panier
+    const stock = parseInt(element.dataset.stock, 10);
+
     const existingItem = cart.find(item => item.id === id);
-    
+
     if (existingItem) {
         if (existingItem.quantity < stock) {
             existingItem.quantity++;
@@ -311,48 +326,64 @@ function addToCart(element) {
     } else {
         cart.push({ id, name, price, quantity: 1, stock });
     }
-    
+
     searchInput.value = '';
     searchResults.classList.add('hidden');
     updateCart();
 }
 
+function renderEmptyCart() {
+    const box = el('div', 'text-center py-12 text-gray-400');
+    box.append(
+        icon('fas fa-shopping-basket text-6xl mb-3 opacity-30'),
+        el('p', 'font-semibold', 'Panier vide'),
+        el('p', 'text-xs', 'Ajoutez des produits')
+    );
+    return box;
+}
+
+function renderCartItem(item, index) {
+    const card = el('div', 'bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200 rounded-2xl p-4 hover:shadow-xl transition-all');
+
+    const header = el('div', 'flex justify-between items-start mb-3');
+    const info = el('div', 'flex-1');
+    info.append(el('p', 'font-bold text-gray-900 text-sm', item.name), el('p', 'text-xs text-green-600 font-bold mt-1', formatFcfa(item.price)));
+    const remove = el('button', 'text-red-600 hover:text-red-800 hover:scale-110 transition-transform');
+    remove.type = 'button';
+    remove.setAttribute('aria-label', `Retirer ${item.name} du panier`);
+    remove.append(icon('fas fa-times-circle text-xl'));
+    remove.addEventListener('click', () => removeFromCart(index));
+    header.append(info, remove);
+
+    const controls = el('div', 'flex items-center gap-2');
+    const minus = el('button', 'bg-gradient-to-br from-red-400 to-red-600 hover:from-red-500 hover:to-red-700 text-white w-9 h-9 rounded-xl flex items-center justify-center font-bold shadow-lg hover:scale-110 transition-all', '-');
+    minus.type = 'button';
+    minus.addEventListener('click', () => decreaseQuantity(index));
+    const qty = el('input', 'w-16 text-center border-2 border-gray-300 rounded-xl py-2 font-bold text-gray-900');
+    qty.type = 'number';
+    qty.min = 1;
+    qty.max = item.stock;
+    qty.value = item.quantity;
+    qty.addEventListener('change', () => updateQuantity(index, qty.value));
+    const plus = el('button', 'bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white w-9 h-9 rounded-xl flex items-center justify-center font-bold shadow-lg hover:scale-110 transition-all', '+');
+    plus.type = 'button';
+    plus.addEventListener('click', () => increaseQuantity(index));
+    controls.append(minus, qty, plus, el('span', 'text-sm text-gray-600 ml-auto font-bold', formatFcfa(item.price * item.quantity)));
+
+    card.append(header, controls);
+    return card;
+}
+
 function updateCart() {
     const cartItems = document.getElementById('cartItems');
     const cartCount = document.getElementById('cartCount');
-    
+
     if (cart.length === 0) {
-        cartItems.innerHTML = `
-            <div class="text-center py-12 text-gray-400">
-                <i class="fas fa-shopping-basket text-6xl mb-3 opacity-30"></i>
-                <p class="font-semibold">Panier vide</p>
-                <p class="text-xs">Ajoutez des produits</p>
-            </div>
-        `;
+        cartItems.replaceChildren(renderEmptyCart());
     } else {
-        cartItems.innerHTML = cart.map((item, index) => `
-            <div class="bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200 rounded-2xl p-4 hover:shadow-xl transition-all">
-                <div class="flex justify-between items-start mb-3">
-                    <div class="flex-1">
-                        <p class="font-bold text-gray-900 text-sm">${item.name}</p>
-                        <p class="text-xs text-green-600 font-bold mt-1">${item.price} FCFA</p>
-                    </div>
-                    <button onclick="removeFromCart(${index})" class="text-red-600 hover:text-red-800 hover:scale-110 transition-transform">
-                        <i class="fas fa-times-circle text-xl"></i>
-                    </button>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="decreaseQuantity(${index})" class="bg-gradient-to-br from-red-400 to-red-600 hover:from-red-500 hover:to-red-700 text-white w-9 h-9 rounded-xl flex items-center justify-center font-bold shadow-lg hover:scale-110 transition-all">-</button>
-                    <input type="number" value="${item.quantity}" min="1" max="${item.stock}" 
-                           onchange="updateQuantity(${index}, this.value)"
-                           class="w-16 text-center border-2 border-gray-300 rounded-xl py-2 font-bold text-gray-900">
-                    <button onclick="increaseQuantity(${index})" class="bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white w-9 h-9 rounded-xl flex items-center justify-center font-bold shadow-lg hover:scale-110 transition-all">+</button>
-                    <span class="text-sm text-gray-600 ml-auto font-bold">${(item.price * item.quantity).toFixed(0)} FCFA</span>
-                </div>
-            </div>
-        `).join('');
+        cartItems.replaceChildren(...cart.map(renderCartItem));
     }
-    
+
     cartCount.textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
     updateTotals();
 }
@@ -379,30 +410,28 @@ function decreaseQuantity(index) {
 }
 
 function updateQuantity(index, value) {
-    const qty = parseInt(value);
+    const qty = parseInt(value, 10);
     if (qty > 0 && qty <= cart[index].stock) {
         cart[index].quantity = qty;
-        updateCart();
     } else {
         alert('⚠️ Quantité invalide!');
-        updateCart();
     }
+    updateCart();
 }
 
-function updateTotals() {
-    const subtotalEl = document.getElementById('subtotal');
-    const discountEl = document.getElementById('discount');
-    const totalEl = document.getElementById('total');
-    
+// Estimation affichée à la caisse ; le montant qui fait foi est recalculé par le serveur.
+function currentTotals() {
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const discountPercent = parseFloat(document.getElementById('discountInput').value) || 0;
     const discountAmount = (subtotal * discountPercent) / 100;
-    const total = subtotal - discountAmount;
-    
-    subtotalEl.textContent = `${subtotal.toFixed(0)} FCFA`;
-    discountEl.textContent = `${discountAmount.toFixed(0)} FCFA`;
-    totalEl.textContent = `${total.toFixed(0)} FCFA`;
-    
+    return { subtotal, discountPercent, discountAmount, total: subtotal - discountAmount };
+}
+
+function updateTotals() {
+    const { subtotal, discountAmount, total } = currentTotals();
+    document.getElementById('subtotal').textContent = formatFcfa(subtotal);
+    document.getElementById('discount').textContent = formatFcfa(discountAmount);
+    document.getElementById('total').textContent = formatFcfa(total);
     updateChange();
 }
 
@@ -415,12 +444,12 @@ document.querySelectorAll('.payment-method-btn').forEach(btn => {
             b.classList.remove('active', 'border-blue-600', 'bg-gradient-to-br', 'from-blue-50', 'to-blue-100', 'text-blue-700', 'border-3');
             b.classList.add('border-gray-300', 'bg-white', 'border-2');
         });
-        
+
         this.classList.add('active', 'border-blue-600', 'bg-gradient-to-br', 'from-blue-50', 'to-blue-100', 'text-blue-700', 'border-3');
         this.classList.remove('border-gray-300', 'bg-white', 'border-2');
-        
+
         selectedPaymentMethod = this.dataset.method;
-        
+
         const amountPaidContainer = document.getElementById('amountPaidContainer');
         if (selectedPaymentMethod === 'especes') {
             amountPaidContainer.classList.remove('hidden');
@@ -430,47 +459,38 @@ document.querySelectorAll('.payment-method-btn').forEach(btn => {
     });
 });
 
-// Calculer la monnaie
 document.getElementById('amountPaid').addEventListener('input', updateChange);
 
 function updateChange() {
-    const total = parseFloat(document.getElementById('total').textContent.replace(' FCFA', '').replace(/\s/g, ''));
+    const { total } = currentTotals();
     const amountPaid = parseFloat(document.getElementById('amountPaid').value) || 0;
-    const change = amountPaid - total;
-    
-    document.getElementById('change').textContent = `${Math.max(0, change).toFixed(0)} FCFA`;
+    document.getElementById('change').textContent = formatFcfa(Math.max(0, amountPaid - total));
 }
 
-// Finaliser la vente
+// Finaliser la vente : seules les intentions sont envoyées (médicaments,
+// quantités, remise, paiement). Les prix et totaux sont calculés par le serveur.
 document.getElementById('completeBtn').addEventListener('click', async () => {
     if (cart.length === 0) {
         alert('⚠️ Le panier est vide!');
         return;
     }
-    
-    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const discountPercent = parseFloat(document.getElementById('discountInput').value) || 0;
-    const total = subtotal - ((subtotal * discountPercent) / 100);
+
+    const { discountPercent, total } = currentTotals();
     const amountPaid = selectedPaymentMethod === 'especes' ? parseFloat(document.getElementById('amountPaid').value) || 0 : total;
-    
+
     if (selectedPaymentMethod === 'especes' && amountPaid < total) {
         alert('⚠️ Le montant payé est insuffisant!');
         return;
     }
-    
+
     const saleData = {
         customer_id: document.getElementById('customerSelect').value || null,
-        items: cart.map(item => ({
-            medication_id: item.id,
-            quantity: item.quantity,
-            unit_price: item.price
-        })),
-        subtotal: subtotal,
+        items: cart.map(item => ({ medication_id: item.id, quantity: item.quantity })),
         discount_percentage: discountPercent,
         payment_method: selectedPaymentMethod,
         amount_paid: amountPaid
     };
-    
+
     try {
         const response = await fetch('/api/create-sale/', {
             method: 'POST',
@@ -480,14 +500,13 @@ document.getElementById('completeBtn').addEventListener('click', async () => {
             },
             body: JSON.stringify(saleData)
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
             alert(`✅ ${data.message}\n\n📄 Voulez-vous imprimer la facture?`);
             window.open(`/sales/${data.sale_id}/invoice/`, '_blank');
-            
-            // Réinitialiser
+
             cart = [];
             document.getElementById('discountInput').value = 0;
             document.getElementById('amountPaid').value = '';
