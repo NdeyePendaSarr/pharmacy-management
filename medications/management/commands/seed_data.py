@@ -1,7 +1,7 @@
 """
-Commande Django : remplit la base avec des données de démo réalistes.
-Version "management command" de populate_db.py — fonctionne en production
-(contrairement au script original bloqué en DEBUG).
+Commande Django : remplit la base avec des données de démonstration fictives.
+Les ventes et le stock passent par les mêmes services que l'application
+(prix lus en base, mouvements de stock, ordonnances).
 
 Idempotente : si des médicaments existent déjà, elle ne fait rien
 (évite les doublons à chaque déploiement).
