@@ -498,7 +498,14 @@ document.getElementById('completeBtn').addEventListener('click', async () => {
     }
 
     const { discountPercent, total } = currentTotals();
-    const amountPaid = selectedPaymentMethod === 'especes' ? parseFloat(document.getElementById('amountPaid').value) || 0 : total;
+    // Espèces : montant remis par le client. Crédit : rien n'est encaissé, tout
+    // le montant passe sur le compte du client. Carte / mobile money : le total.
+    let amountPaid = total;
+    if (selectedPaymentMethod === 'especes') {
+        amountPaid = parseFloat(document.getElementById('amountPaid').value) || 0;
+    } else if (selectedPaymentMethod === 'credit') {
+        amountPaid = 0;
+    }
 
     if (selectedPaymentMethod === 'especes' && amountPaid < total) {
         alert('⚠️ Le montant payé est insuffisant!');
@@ -506,6 +513,10 @@ document.getElementById('completeBtn').addEventListener('click', async () => {
     }
 
     const customerId = document.getElementById('customerSelect').value || null;
+    if (selectedPaymentMethod === 'credit' && !customerId) {
+        alert('⚠️ Paiement à crédit : sélectionnez le client.');
+        return;
+    }
     if (cartNeedsPrescription() && !customerId) {
         alert('⚠️ Ordonnance requise : sélectionnez le client.');
         return;

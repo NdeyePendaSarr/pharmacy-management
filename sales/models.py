@@ -1,4 +1,6 @@
-from django.db import models
+import uuid
+
+from django.db import models, transaction
 from django.contrib.auth.models import User
 from medications.models import Medication
 from django.utils import timezone
@@ -113,27 +115,34 @@ class Sale(models.Model):
         return f"Vente #{self.sale_number}"
     
     def save(self, *args, **kwargs):
-        # Générer un numéro de vente automatique
-        if not self.sale_number:
-            today = timezone.now().date()
-            count = Sale.objects.filter(created_at__date=today).count() + 1
-            self.sale_number = f"V{today.strftime('%Y%m%d')}{count:04d}"
-        
         # Calculer les montants (Decimal, arrondis au centime)
         self.subtotal = to_cents(self.subtotal)
         self.discount_amount = to_cents(Decimal(self.subtotal) * Decimal(self.discount_percentage) / 100)
         self.total = self.subtotal - self.discount_amount
         
-        # Calculer la monnaie
-        if self.amount_paid > self.total:
-            self.change_amount = self.amount_paid - self.total
-        
-        super().save(*args, **kwargs)
+        # Monnaie rendue : seulement si le client a donné plus que le total
+        # (jamais pour une vente à crédit).
+        paid = to_cents(self.amount_paid)
+        self.change_amount = max(Decimal("0"), paid - self.total) if self.payment_method != 'credit' else Decimal("0")
+
+        if self.sale_number:
+            super().save(*args, **kwargs)
+            return
+
+        # Numéro de vente dérivé de l'identifiant : unique même si deux ventes
+        # sont enregistrées au même instant ou si une vente est supprimée.
+        # Un numéro provisoire unique occupe la colonne le temps d'obtenir l'id.
+        self.sale_number = f"TMP-{uuid.uuid4().hex}"
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            day = timezone.localtime(self.created_at).strftime('%Y%m%d')
+            self.sale_number = f"V{day}-{self.pk:06d}"
+            Sale.objects.filter(pk=self.pk).update(sale_number=self.sale_number)
     
     @property
     def profit(self):
-        """Calcul du bénéfice"""
-        total_cost = sum(item.medication.purchase_price * item.quantity for item in self.items.all())
+        """Bénéfice : total encaissé moins le coût d'achat figé au moment de la vente."""
+        total_cost = sum(item.unit_cost * item.quantity for item in self.items.all())
         return self.total - total_cost
 
 
@@ -144,6 +153,9 @@ class SaleItem(models.Model):
     medication = models.ForeignKey(Medication, on_delete=models.PROTECT, verbose_name="Médicament")
     quantity = models.IntegerField(verbose_name="Quantité")
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Prix unitaire")
+    # Prix d'achat au moment de la vente : le bénéfice d'une vente passée ne
+    # change pas si le prix d'achat du médicament évolue ensuite.
+    unit_cost = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Coût d'achat unitaire")
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Sous-total")
     
     class Meta:

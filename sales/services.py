@@ -9,11 +9,12 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from medications.models import Medication
 from medications.stock import StockError, apply_movement
-from .models import Customer, Prescription, Sale, SaleItem
+from .models import Customer, Prescription, Sale, SaleItem, to_cents
 
 # Remise maximale autorisée à la caisse, en pourcentage.
 MAX_DISCOUNT = Decimal("20")
@@ -109,15 +110,20 @@ def create_sale(user, data):
     if amount_paid < 0:
         raise SaleError("Montant payé invalide.")
 
-    customer = None
     customer_id = data.get("customer_id")
-    if customer_id:
-        try:
-            customer = Customer.objects.get(pk=int(customer_id))
-        except (TypeError, ValueError, Customer.DoesNotExist):
-            raise SaleError("Client introuvable.")
+    if payment_method == "credit" and not customer_id:
+        raise SaleError("Paiement à crédit : sélectionnez le client.")
 
     with transaction.atomic():
+        customer = None
+        if customer_id:
+            try:
+                # Verrou sur le client : son encours de crédit est relu et mis à
+                # jour dans cette transaction, sans course avec une autre vente.
+                customer = Customer.objects.select_for_update().get(pk=int(customer_id))
+            except (TypeError, ValueError, Customer.DoesNotExist):
+                raise SaleError("Client introuvable.")
+
         # Verrouille les médicaments (ordre stable pour éviter les interblocages)
         # et vérifie le stock avant toute écriture.
         medications = {
@@ -146,10 +152,29 @@ def create_sale(user, data):
                 raise SaleError(f"Ordonnance requise pour {names} : sélectionnez le client.")
             prescription_info = _parse_prescription(data.get("prescription"))
 
-        subtotal = sum(
+        subtotal = to_cents(sum(
             (medications[med_id].selling_price * quantity for med_id, quantity in quantities.items()),
             Decimal("0"),
-        )
+        ))
+        total = subtotal - to_cents(subtotal * discount / 100)
+        amount_paid = to_cents(amount_paid)
+
+        if payment_method == "especes":
+            if amount_paid < total:
+                raise SaleError(f"Montant payé insuffisant : {amount_paid} FCFA pour un total de {total} FCFA.")
+        elif payment_method == "credit":
+            if amount_paid > total:
+                raise SaleError("Paiement à crédit : l'acompte ne peut pas dépasser le total.")
+            due = total - amount_paid
+            if due > customer.available_credit:
+                raise SaleError(
+                    f"Crédit insuffisant pour {customer.full_name} : "
+                    f"disponible {customer.available_credit} FCFA, demandé {due} FCFA."
+                )
+            Customer.objects.filter(pk=customer.pk).update(current_credit=F("current_credit") + due)
+        else:
+            # Carte ou mobile money : le montant débité est exactement le total.
+            amount_paid = total
 
         sale = Sale(
             customer=customer,
@@ -169,6 +194,7 @@ def create_sale(user, data):
                 medication=med,
                 quantity=quantity,
                 unit_price=med.selling_price,
+                unit_cost=med.purchase_price,
             )
             try:
                 apply_movement(
