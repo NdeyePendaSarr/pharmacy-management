@@ -27,6 +27,7 @@ def pos_view(request):
     context = {
         'medications': medications,
         'customers': customers,
+        'max_discount': services.MAX_DISCOUNT,
     }
     return render(request, 'sales/pos.html', context)
 

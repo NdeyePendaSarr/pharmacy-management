@@ -94,3 +94,7 @@ class ServerSidePricingTests(CreateSaleTestMixin, TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertNotIn("détail interne secret", response.content.decode())
         self.assertFalse(response.json()["success"])
+
+    def test_till_shows_the_maximum_discount(self):
+        response = self.client.get(reverse("pos"))
+        self.assertContains(response, 'max="20"')
