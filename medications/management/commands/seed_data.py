@@ -284,24 +284,24 @@ class Command(BaseCommand):
             })
             print(f"  ✅ Vente #{sale.sale_number} - {sale.total} FCFA")
 
-        print(f"\n✅ 3 ventes crees\n")
+        print("\n✅ 3 ventes crees\n")
 
         # 5. RESUME
         print("=" * 60)
         print("✅ BASE DE DONNEES REMPLIE AVEC SUCCES !")
         print("=" * 60)
-        print(f"\n📊 STATISTIQUES :")
+        print("\n📊 STATISTIQUES :")
         print(f"  • Categories : {Category.objects.count()}")
         print(f"  • Medicaments : {Medication.objects.count()}")
         print(f"  • Clients : {Customer.objects.count()}")
         print(f"  • Ventes : {Sale.objects.count()}")
         print(f"  • Medicaments en alerte stock : {Medication.objects.filter(quantity__lte=10).count()}")
-        print(f"\n🎯 Vous pouvez maintenant tester l'application !")
-        print(f"   Dashboard : http://127.0.0.1:8000/dashboard/")
-        print(f"   POS : http://127.0.0.1:8000/pos/")
-        print(f"   Medicaments : http://127.0.0.1:8000/medications/")
-        print(f"   Clients : http://127.0.0.1:8000/customers/")
-        print(f"   Ventes : http://127.0.0.1:8000/sales/")
+        print("\n🎯 Vous pouvez maintenant tester l'application !")
+        print("   Dashboard : http://127.0.0.1:8000/dashboard/")
+        print("   POS : http://127.0.0.1:8000/pos/")
+        print("   Medicaments : http://127.0.0.1:8000/medications/")
+        print("   Clients : http://127.0.0.1:8000/customers/")
+        print("   Ventes : http://127.0.0.1:8000/sales/")
         print("\n" + "=" * 60)
 
 

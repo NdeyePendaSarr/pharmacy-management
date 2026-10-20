@@ -71,7 +71,7 @@ def register_view(request):
             return render(request, 'users/register.html')
         
         # Créer l'utilisateur
-        user = User.objects.create_user(
+        User.objects.create_user(
             username=username,
             email=email,
             password=password
