@@ -5,12 +5,14 @@ Règle d'or : le navigateur n'envoie que des intentions (quels médicaments,
 combien, quel mode de paiement). Tous les montants sont recalculés ici à
 partir des prix enregistrés en base, en Decimal.
 """
+from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
+from django.utils import timezone
 
 from medications.models import Medication
-from .models import Customer, Sale, SaleItem
+from .models import Customer, Prescription, Sale, SaleItem
 
 # Remise maximale autorisée à la caisse, en pourcentage.
 MAX_DISCOUNT = Decimal("20")
@@ -65,6 +67,24 @@ def _parse_items(items_data):
     return quantities
 
 
+def _parse_prescription(raw):
+    """Valide les informations d'ordonnance saisies à la caisse."""
+    if not isinstance(raw, dict):
+        raise SaleError("Ordonnance requise : saisissez le médecin et la date de prescription.")
+    doctor_name = str(raw.get("doctor_name") or "").strip()
+    if not doctor_name:
+        raise SaleError("Ordonnance incomplète : le nom du médecin est obligatoire.")
+    if len(doctor_name) > Prescription._meta.get_field("doctor_name").max_length:
+        raise SaleError("Ordonnance invalide : nom du médecin trop long.")
+    try:
+        prescription_date = date.fromisoformat(str(raw.get("prescription_date") or ""))
+    except ValueError:
+        raise SaleError("Ordonnance incomplète : la date de prescription est invalide.")
+    if prescription_date > timezone.localdate():
+        raise SaleError("Ordonnance invalide : la date de prescription est dans le futur.")
+    return doctor_name, prescription_date
+
+
 def create_sale(user, data):
     """
     Crée une vente complète à partir des données de la caisse.
@@ -105,13 +125,25 @@ def create_sale(user, data):
         }
         if len(medications) != len(quantities):
             raise SaleError("Un médicament du panier est introuvable.")
+        today = timezone.localdate()
         for med_id, quantity in quantities.items():
             med = medications[med_id]
+            if med.expiry_date < today:
+                raise SaleError(f'"{med.name}" est périmé et ne peut pas être vendu.')
             if quantity > med.quantity:
                 raise SaleError(
                     f'Stock insuffisant pour "{med.name}" '
                     f"(disponible : {med.quantity}, demandé : {quantity})."
                 )
+
+        # Médicament sur ordonnance : client identifié + ordonnance liée à la vente.
+        prescription_meds = [med.name for med in medications.values() if med.requires_prescription]
+        prescription_info = None
+        if prescription_meds:
+            names = ", ".join(sorted(prescription_meds))
+            if customer is None:
+                raise SaleError(f"Ordonnance requise pour {names} : sélectionnez le client.")
+            prescription_info = _parse_prescription(data.get("prescription"))
 
         subtotal = sum(
             (medications[med_id].selling_price * quantity for med_id, quantity in quantities.items()),
@@ -136,6 +168,15 @@ def create_sale(user, data):
                 medication=med,
                 quantity=quantity,
                 unit_price=med.selling_price,
+            )
+
+        if prescription_info:
+            doctor_name, prescription_date = prescription_info
+            Prescription.objects.create(
+                customer=customer,
+                sale=sale,
+                doctor_name=doctor_name,
+                prescription_date=prescription_date,
             )
 
     return sale

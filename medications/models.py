@@ -19,8 +19,20 @@ class Category(models.Model):
         return self.name
 
 
+class MedicationQuerySet(models.QuerySet):
+    def not_expired(self):
+        """Médicaments dont la date de péremption n'est pas dépassée (vendables jusqu'à ce jour inclus)."""
+        return self.filter(expiry_date__gte=timezone.localdate())
+
+    def sellable(self):
+        """Ce que la caisse peut proposer : en stock et non périmé."""
+        return self.not_expired().filter(quantity__gt=0)
+
+
 class Medication(models.Model):
     """Modèle pour les médicaments"""
+
+    objects = MedicationQuerySet.as_manager()
     
     FORM_CHOICES = [
         ('comprimé', 'Comprimé'),
@@ -83,12 +95,12 @@ class Medication(models.Model):
     @property
     def is_expired(self):
         """Vérifie si le médicament est périmé"""
-        return self.expiry_date < timezone.now().date()
+        return self.expiry_date < timezone.localdate()
     
     @property
     def is_expiring_soon(self):
         """Vérifie si le médicament expire dans moins de 30 jours"""
-        days_until_expiry = (self.expiry_date - timezone.now().date()).days
+        days_until_expiry = (self.expiry_date - timezone.localdate()).days
         return 0 < days_until_expiry <= 30
     
     @property

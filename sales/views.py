@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 @permission_required('sales.add_sale', raise_exception=True)
 def pos_view(request):
     """Interface de Point de Vente (POS)"""
-    medications = Medication.objects.filter(quantity__gt=0)
+    # Seuls les médicaments en stock et non périmés sont proposés à la caisse.
+    medications = Medication.objects.sellable().select_related('category')
     customers = Customer.objects.all()
     
     context = {
@@ -36,11 +37,10 @@ def search_medication(request):
     query = request.GET.get('q', '')
     
     if query:
-        medications = Medication.objects.filter(
+        medications = Medication.objects.sellable().filter(
             Q(name__icontains=query) |
             Q(dci__icontains=query) |
-            Q(barcode__icontains=query),
-            quantity__gt=0
+            Q(barcode__icontains=query)
         )[:10]
         
         results = []
@@ -52,6 +52,7 @@ def search_medication(request):
                 'price': float(med.selling_price),
                 'quantity': med.quantity,
                 'image': med.image_display,
+                'requires_prescription': med.requires_prescription,
             })
         
         return JsonResponse({'results': results})
