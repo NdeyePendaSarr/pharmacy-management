@@ -8,6 +8,7 @@ from django.views.decorators.http import require_POST
 from django.db.models import Q, Sum
 from .models import Sale, Customer
 from . import services
+from .forms import CustomerForm
 from medications.models import Medication
 import json
 import logging
@@ -171,25 +172,12 @@ def customer_list(request):
 @permission_required('sales.add_customer', raise_exception=True)
 def customer_create(request):
     """Créer un client"""
-    if request.method == 'POST':
-        try:
-            customer = Customer.objects.create(
-                first_name=request.POST.get('first_name'),
-                last_name=request.POST.get('last_name'),
-                phone=request.POST.get('phone'),
-                email=request.POST.get('email', ''),
-                address=request.POST.get('address', ''),
-                date_of_birth=request.POST.get('date_of_birth') or None,
-                customer_type=request.POST.get('customer_type', 'particulier'),
-                medical_conditions=request.POST.get('medical_conditions', ''),
-                credit_limit=request.POST.get('credit_limit', 0),
-            )
-            messages.success(request, f'Client "{customer.full_name}" créé avec succès !')
-            return redirect('customer_list')
-        except Exception as e:
-            messages.error(request, f'Erreur : {str(e)}')
-    
-    return render(request, 'sales/customer_form.html')
+    form = CustomerForm(request.POST or None, user=request.user)
+    if request.method == 'POST' and form.is_valid():
+        customer = form.save()
+        messages.success(request, f'Client "{customer.full_name}" créé avec succès !')
+        return redirect('customer_list')
+    return render(request, 'sales/customer_form.html', {'form': form})
 
 
 @login_required
@@ -211,55 +199,17 @@ def customer_detail(request, pk):
     return render(request, 'sales/customer_detail.html', context)
 
 
-# -------------------------------------------------------------------------
-# Mise à jour de la logique de customer_update pour la modification (CRUD)
-# -------------------------------------------------------------------------
-
 @login_required
 @permission_required('sales.change_customer', raise_exception=True)
 def customer_update(request, pk):
     """Mise à jour du client existant"""
     customer = get_object_or_404(Customer, pk=pk)
-    
-    if request.method == 'POST':
-        try:
-            # Récupérer et mettre à jour les champs de l'objet customer
-            customer.first_name = request.POST.get('first_name')
-            customer.last_name = request.POST.get('last_name')
-            customer.phone = request.POST.get('phone')
-            customer.email = request.POST.get('email', '')
-            customer.address = request.POST.get('address', '')
-            
-            # Gérer le champ de date (peut être None)
-            date_of_birth_str = request.POST.get('date_of_birth')
-            customer.date_of_birth = date_of_birth_str if date_of_birth_str else None
-            
-            customer.customer_type = request.POST.get('customer_type', 'particulier')
-            customer.medical_conditions = request.POST.get('medical_conditions', '')
-            
-            # Gérer le champ numérique (DecimalField): s'assurer que c'est un nombre
-            credit_limit_str = request.POST.get('credit_limit')
-            try:
-                # Convertir en Decimal (ou float)
-                customer.credit_limit = float(credit_limit_str)
-            except (ValueError, TypeError):
-                customer.credit_limit = 0
-            
-            #Sauvegarder l'objet mis à jour dans la base de données
-            customer.save()
-            
-            messages.success(request, f'Client "{customer.full_name}" mis à jour avec succès !')
-            return redirect('customer_detail', pk=customer.pk)
-
-        except Exception as e:
-            # Gérer les erreurs de validation ou de base de données
-            messages.error(request, f'Erreur lors de la mise à jour : {str(e)}')
-            
-    # Pour la méthode GET (affichage initial avec pré-remplissage) ou en cas d'erreur POST
-    context = {
-        'customer': customer,
-    }
-    return render(request, 'sales/customer_form.html', context)
+    form = CustomerForm(request.POST or None, instance=customer, user=request.user)
+    if request.method == 'POST' and form.is_valid():
+        customer = form.save()
+        messages.success(request, f'Client "{customer.full_name}" mis à jour avec succès !')
+        return redirect('customer_detail', pk=customer.pk)
+    return render(request, 'sales/customer_form.html', {'form': form, 'customer': customer})
 
 
 @login_required

@@ -47,6 +47,7 @@
         <!-- Formulaire de modification -->
         <form method="POST" class="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-gray-100 overflow-hidden fade-in" style="animation-delay: 0.2s;">
             {% csrf_token %}
+            {% include 'partials/form_errors.html' %}
             
             <div class="p-10">
                 <div class="space-y-8">
@@ -63,7 +64,7 @@
                                 type="text" 
                                 name="name" 
                                 id="name"
-                                value="{{ category.name }}"
+                                value="{{ form.name.value|default_if_none:'' }}"
                                 required
                                 class="block w-full px-6 py-4 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-300 text-gray-900 font-semibold placeholder-gray-400 hover:border-gray-300"
                                 placeholder="Ex: Antibiotiques, Antalgiques..."
@@ -90,7 +91,7 @@
                                 rows="5"
                                 class="block w-full px-6 py-4 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-300 text-gray-900 font-medium placeholder-gray-400 hover:border-gray-300 resize-none"
                                 placeholder="Description de la catégorie..."
-                            >{{ category.description }}</textarea>
+                            >{{ form.description.value|default_if_none:'' }}</textarea>
                             <div class="absolute top-4 right-4 pointer-events-none">
                                 <i class="fas fa-comment-dots text-gray-300"></i>
                             </div>

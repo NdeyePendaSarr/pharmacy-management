@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 
 {% block title %}
 {% if customer %}
@@ -43,6 +44,7 @@
                   {% endif %}"
           class="space-y-6">
         {% csrf_token %}
+        {% include 'partials/form_errors.html' %}
         
         <div class="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
             <h2 class="text-2xl font-bold text-gray-900 mb-6 flex items-center">
@@ -61,7 +63,7 @@
                         type="text" 
                         name="first_name" 
                         required
-                        value="{{ customer.first_name|default:'' }}" {# AJOUTÉ #}
+                        value="{{ form.first_name.value|default_if_none:'' }}"
                         class="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all font-medium"
                         placeholder="Ex: Fatou"
                     >
@@ -75,7 +77,7 @@
                         type="text" 
                         name="last_name" 
                         required
-                        value="{{ customer.last_name|default:'' }}" {# AJOUTÉ #}
+                        value="{{ form.last_name.value|default_if_none:'' }}"
                         class="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all font-medium"
                         placeholder="Ex: Diop"
                     >
@@ -89,7 +91,7 @@
                         type="tel" 
                         name="phone" 
                         required
-                        value="{{ customer.phone|default:'' }}" {# AJOUTÉ #}
+                        value="{{ form.phone.value|default_if_none:'' }}"
                         class="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all font-medium"
                         placeholder="+221 77 123 45 67"
                     >
@@ -102,12 +104,13 @@
                     <input 
                         type="email" 
                         name="email" 
-                        value="{{ customer.email|default:'' }}" {# AJOUTÉ #}
+                        value="{{ form.email.value|default_if_none:'' }}"
                         class="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all font-medium"
                         placeholder="client@exemple.com"
                     >
                 </div>
 
+                {% if form.shows_sensitive_fields %}
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-2">
                         <i class="fas fa-birthday-cake text-orange-500 mr-2"></i>Date de naissance
@@ -115,10 +118,11 @@
                     <input 
                         type="date" 
                         name="date_of_birth" 
-                        value="{{ customer.date_of_birth|date:'Y-m-d'|default:'' }}" {# AJOUTÉ (Format obligatoire pour input type="date") #}
+                        value="{% if form.is_bound %}{{ form.date_of_birth.value|default_if_none:'' }}{% else %}{{ form.date_of_birth.value|date:'Y-m-d' }}{% endif %}"
                         class="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all font-medium"
                     >
                 </div>
+                {% endif %}
 
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -129,9 +133,9 @@
                         required
                         class="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all font-medium"
                     >
-                        <option value="particulier" {% if customer.customer_type == 'particulier' %}selected{% endif %}>👤 Particulier</option>
-                        <option value="entreprise" {% if customer.customer_type == 'entreprise' %}selected{% endif %}>🏢 Entreprise</option>
-                        <option value="assurance" {% if customer.customer_type == 'assurance' %}selected{% endif %}>🛡️ Assurance</option>
+                        <option value="particulier" {% if form.customer_type.value == 'particulier' %}selected{% endif %}>👤 Particulier</option>
+                        <option value="entreprise" {% if form.customer_type.value == 'entreprise' %}selected{% endif %}>🏢 Entreprise</option>
+                        <option value="assurance" {% if form.customer_type.value == 'assurance' %}selected{% endif %}>🛡️ Assurance</option>
                     </select>
                 </div>
             </div>
@@ -145,10 +149,11 @@
                     rows="3"
                     class="w-full px-4 py-4 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all"
                     placeholder="Adresse complète du client..."
-                >{{ customer.address|default:'' }}</textarea>{# AJOUTÉ #}
+                >{{ form.address.value|default_if_none:'' }}</textarea>
             </div>
         </div>
 
+        {% if form.shows_sensitive_fields %}
         <div class="bg-gradient-to-br from-red-50 to-red-100 rounded-3xl shadow-xl p-8 border-4 border-red-200">
             <h2 class="text-2xl font-bold text-red-800 mb-6 flex items-center">
                 <div class="bg-red-200 rounded-2xl p-3 mr-4">
@@ -167,7 +172,7 @@
                     rows="4"
                     class="w-full px-4 py-4 border-2 border-red-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-red-200 focus:border-red-500 transition-all"
                     placeholder="Ex: Asthme chronique, allergie à la pénicilline, diabète de type 2, hypertension..."
-                >{{ customer.medical_conditions|default:'' }}</textarea>{# AJOUTÉ #}
+                >{{ form.medical_conditions.value|default_if_none:'' }}</textarea>
                 <div class="mt-4 bg-red-100 rounded-xl p-4">
                     <p class="text-sm text-red-800 flex items-start">
                         <i class="fas fa-info-circle text-red-600 mr-3 mt-1"></i>
@@ -176,6 +181,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
         <div class="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
             <h2 class="text-2xl font-bold text-gray-900 mb-6 flex items-center">
@@ -193,9 +199,9 @@
                 <input 
                     type="number" 
                     name="credit_limit" 
-                    value="{{ customer.credit_limit|default:0 }}" {# AJOUTÉ #}
+                    value="{{ form.credit_limit.value|default_if_none:0|unlocalize }}"
                     min="0"
-                    step="1000"
+                    step="any"
                     class="w-full px-4 py-4 border-2 border-green-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all font-bold text-2xl text-center text-green-900"
                     placeholder="0"
                 >
@@ -214,7 +220,7 @@
             </a>
             <button type="submit" class="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-2xl font-bold transition-all transform hover:scale-105 shadow-xl">
                 <i class="fas fa-save mr-2"></i>
-                {% if customer %}Sauvegarder les modifications{% else %}Enregistrer le client{% endif %} {# AJOUTÉ #}
+                {% if customer %}Sauvegarder les modifications{% else %}Enregistrer le client{% endif %}
             </button>
         </div>
     </form>
