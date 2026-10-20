@@ -2,6 +2,14 @@ from django.db import models
 from django.contrib.auth.models import User
 from medications.models import Medication
 from django.utils import timezone
+from decimal import Decimal, ROUND_HALF_UP
+
+CENT = Decimal("0.01")
+
+
+def to_cents(value):
+    """Arrondit un montant au centime (arrondi commercial)."""
+    return Decimal(value).quantize(CENT, rounding=ROUND_HALF_UP)
 
 
 class Customer(models.Model):
@@ -108,8 +116,9 @@ class Sale(models.Model):
             count = Sale.objects.filter(created_at__date=today).count() + 1
             self.sale_number = f"V{today.strftime('%Y%m%d')}{count:04d}"
         
-        # Calculer les montants
-        self.discount_amount = (self.subtotal * self.discount_percentage) / 100
+        # Calculer les montants (Decimal, arrondis au centime)
+        self.subtotal = to_cents(self.subtotal)
+        self.discount_amount = to_cents(Decimal(self.subtotal) * Decimal(self.discount_percentage) / 100)
         self.total = self.subtotal - self.discount_amount
         
         # Calculer la monnaie
@@ -143,7 +152,7 @@ class SaleItem(models.Model):
     
     def save(self, *args, **kwargs):
         # Calculer le sous-total
-        self.subtotal = self.unit_price * self.quantity
+        self.subtotal = to_cents(Decimal(self.unit_price) * self.quantity)
         
         # Mettre à jour le stock du médicament (si nouvelle ligne)
         if not self.pk:

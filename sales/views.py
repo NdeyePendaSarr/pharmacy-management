@@ -4,11 +4,15 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
-from django.db import transaction
+from django.views.decorators.http import require_POST
 from django.db.models import Q, Sum
-from .models import Sale, SaleItem, Customer
+from .models import Sale, Customer
+from . import services
 from medications.models import Medication
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -54,99 +58,32 @@ def search_medication(request):
 
 
 @login_required
+@require_POST
 def create_sale(request):
-    """Créer une vente (API de Finalisation)"""
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            items_data = data.get('items', [])
+    """Créer une vente (API de finalisation de la caisse)."""
+    try:
+        data = json.loads(request.body)
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({'success': False, 'message': "Requête invalide."}, status=400)
 
-            if not items_data:
-                return JsonResponse({
-                    'success': False,
-                    'message': "Le panier est vide."
-                }, status=400)
+    try:
+        sale = services.create_sale(request.user, data)
+    except services.SaleError as e:
+        # Message métier rédigé par nous : il peut être montré au vendeur.
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+    except Exception:
+        logger.exception("Échec inattendu lors de la création d'une vente")
+        return JsonResponse({
+            'success': False,
+            'message': "Une erreur inattendue est survenue. La vente n'a pas été enregistrée.",
+        }, status=500)
 
-            with transaction.atomic():
-                # 1) Regrouper les quantités demandées par médicament (au cas où
-                #    le même produit apparaîtrait deux fois dans le panier), afin
-                #    de valider le stock disponible de façon cumulative.
-                requested_quantities = {}
-                for item in items_data:
-                    try:
-                        qty = int(item['quantity'])
-                    except (TypeError, ValueError):
-                        raise ValueError("Quantité invalide dans le panier.")
-                    if qty <= 0:
-                        raise ValueError("Quantité invalide dans le panier.")
-                    med_id = item['medication_id']
-                    requested_quantities[med_id] = requested_quantities.get(med_id, 0) + qty
-
-                # 2) Verrouiller chaque médicament concerné et valider le stock
-                #    AVANT toute écriture, pour éviter la survente et les
-                #    conditions de course entre deux ventes simultanées.
-                medications_cache = {}
-                for med_id, total_qty in requested_quantities.items():
-                    medication = Medication.objects.select_for_update().get(id=med_id)
-                    if total_qty > medication.quantity:
-                        raise ValueError(
-                            f'Stock insuffisant pour "{medication.name}" '
-                            f'(disponible : {medication.quantity}, demandé : {total_qty}).'
-                        )
-                    medications_cache[str(med_id)] = medication
-
-                # 3) Créer la vente
-                sale = Sale.objects.create(
-                    customer_id=data.get('customer_id') if data.get('customer_id') else None,
-                    subtotal=data.get('subtotal', 0),
-                    discount_percentage=data.get('discount_percentage', 0),
-                    payment_method=data.get('payment_method'),
-                    amount_paid=data.get('amount_paid', 0),
-                    created_by=request.user,
-                    # Statut forcé à 'completee' lors de la finalisation
-                    status='completee',
-                )
-
-                # 4) Créer les lignes de vente (le stock est décrémenté dans StockMovement.save())
-                for item in items_data:
-                    medication = medications_cache[str(item['medication_id'])]
-                    SaleItem.objects.create(
-                        sale=sale,
-                        medication=medication,
-                        quantity=int(item['quantity']),
-                        unit_price=item['unit_price'],
-                    )
-
-                # 5) Mettre à jour le sous-total
-                sale.subtotal = sum(item.subtotal for item in sale.items.all())
-                sale.save()
-
-            return JsonResponse({
-                'success': True,
-                'sale_id': sale.id,
-                'sale_number': sale.sale_number,
-                'message': f'Vente #{sale.sale_number} créée avec succès !'
-            })
-
-        except Medication.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'message': "Un médicament du panier est introuvable."
-            }, status=400)
-
-        except ValueError as e:
-            return JsonResponse({
-                'success': False,
-                'message': str(e)
-            }, status=400)
-
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'message': str(e)
-            }, status=400)
-
-    return JsonResponse({'success': False}, status=400)
+    return JsonResponse({
+        'success': True,
+        'sale_id': sale.id,
+        'sale_number': sale.sale_number,
+        'message': f'Vente #{sale.sale_number} créée avec succès !'
+    })
 
 
 @login_required
