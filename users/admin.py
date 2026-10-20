@@ -1,5 +1,2 @@
-from django.contrib import admin
-from django.contrib.auth.models import User
-
-# Enregistrer le modèle User de base dans l'admin, si nécessaire
-# admin.site.register(User)
+# L'application users n'a pas de modèle propre : rien à enregistrer ici.
+# Les comptes et les groupes se gèrent depuis l'admin de django.contrib.auth.

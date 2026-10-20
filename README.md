@@ -7,8 +7,8 @@
 Développée avec **Django 5.2** et **PostgreSQL**, déployée sur **Render**. Le projet met l'accent sur l'exactitude des règles métier : un prix, un stock ou un encours de crédit ne peut pas être faussé depuis le navigateur, et chaque règle est couverte par un test automatisé.
 
 > **🔗 Démo en ligne : [PharmaNPS-Alou](https://pharmanps-aloucoding-b8ex.onrender.com/)**
-> Compte de démonstration au rôle **Vendeur** : identifiant `demo`, mot de passe communiqué sur demande.
-> Toutes les données de la démo (médicaments, clients, ventes, ordonnances) sont **fictives**.
+> Compte de démonstration au rôle **Vendeur** : identifiant `demo`, mot de passe `Pharma-Visite-2026`.
+> Toutes les données de la démo (médicaments, clients, ventes, ordonnances) sont **fictives** et peuvent être modifiées par les visiteurs.
 
 ---
 
