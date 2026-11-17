@@ -4,7 +4,7 @@
 
 > Application web de gestion d'une pharmacie : **stock des médicaments**, **caisse**, **clients**, **ordonnances**, **facturation** et **suivi de l'activité commerciale**.
 
-Développée avec **Django 5.2** et **PostgreSQL**, déployée sur **Render**. Le projet met l'accent sur l'exactitude des règles métier : un prix, un stock ou un encours de crédit ne peut pas être faussé depuis le navigateur, et chaque règle est couverte par un test automatisé.
+Développée avec **Django 5.2** et **PostgreSQL**, déployée sur **Render** avec une base **Neon**. Le projet met l'accent sur l'exactitude des règles métier : un prix, un stock ou un encours de crédit ne peut pas être faussé depuis le navigateur, et chaque règle est couverte par un test automatisé.
 
 > **🔗 Démo en ligne : [PharmaNPS-Alou](https://pharmanps-aloucoding-b8ex.onrender.com/)**
 > Compte de démonstration au rôle **Vendeur** : identifiant `demo`, mot de passe `Pharma-Visite-2026`.
@@ -129,7 +129,7 @@ Le numéro est dérivé de l'identifiant de la vente (`V20261020-000123`) : il r
 | Couche | Technologie |
 |---|---|
 | Backend | **Django 5.2** (Python 3.13) |
-| Base de données | **PostgreSQL** (SQLite possible en développement) |
+| Base de données | **PostgreSQL** hébergé chez **Neon** (SQLite possible en développement) |
 | Frontend | Gabarits Django, **Tailwind CSS**, **Chart.js** |
 | Sécurité | Rôles par permissions Django, **django-axes**, HTTPS/HSTS |
 | Médias | **Cloudinary** |
@@ -160,7 +160,7 @@ Chaque application a un dossier `tests/`.
 
 ## 🧪 Tests et intégration continue
 
-**83 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
+**88 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
 
 | Domaine | Ce qui est vérifié |
 |---|---|
@@ -173,6 +173,7 @@ Chaque application a un dossier `tests/`.
 | Formulaires | Prix, quantités, code-barres unique, dates, catégorie en double, champs sensibles non modifiables sans permission |
 | Réglages | Stockages de production, `check --deploy` sans avertissement, verrouillage après 5 échecs de connexion |
 | Performance | Tableau de bord en 9 requêtes, quel que soit le volume (`assertNumQueries`) |
+| Déploiement | `init_admin` et `seed_data` reconstruisent la démo sur une base vide, sans doublon s'ils sont relancés |
 
 Les tests de concurrence nécessitent PostgreSQL ; ils sont ignorés avec SQLite.
 
@@ -202,7 +203,7 @@ python manage.py migrate          # crée aussi les groupes Pharmacien et Vendeu
 python manage.py createsuperuser
 python manage.py seed_data        # données de démonstration fictives (base vide uniquement)
 python manage.py runserver
-python manage.py test             # 83 tests
+python manage.py test             # 88 tests
 ```
 
 La feuille de style `static/css/output.css` est générée par Tailwind CSS à partir de `static/css/input.css` (voir `build.sh`).
@@ -211,7 +212,7 @@ La feuille de style `static/css/output.css` est générée par Tailwind CSS à p
 
 ## 🌍 Déploiement sur Render
 
-`render.yaml` décrit le service web et la base PostgreSQL. À chaque déploiement, `build.sh` exécute :
+`render.yaml` décrit le service web ; la base PostgreSQL est hébergée chez Neon et reliée par `DATABASE_URL`. À chaque déploiement, `build.sh` exécute :
 
 ```text
 pip install → Tailwind CSS → collectstatic → migrate (+ groupes)
@@ -227,6 +228,15 @@ Les trois commandes d'initialisation sont **idempotentes** : relancées, elles n
 | `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Superutilisateur créé par `init_admin` |
 | `DEMO_USERNAME`, `DEMO_PASSWORD` | Compte de démonstration Vendeur créé par `init_demo` |
 | `ALLOW_REGISTRATION` | `False` par défaut ; `True` rouvre l'inscription publique (comptes sans rôle) |
+
+### Base de données (Neon)
+
+La base n'est plus une base Render gratuite (elle expire au bout de quelques semaines) : c'est une base PostgreSQL **Neon**, région Francfort, comme le service web. Dans `render.yaml`, `DATABASE_URL` est en `sync: false` : sa valeur se saisit dans le tableau de bord Render et n'est jamais commitée.
+
+- Utiliser la chaîne de connexion **directe** de Neon (hôte sans `-pooler`) terminée par `?sslmode=require` : l'application garde des connexions persistantes (`conn_max_age=600`), ce que le pooler de Neon en mode transaction ne permet pas.
+- Une **base vide suffit** : au déploiement suivant, `migrate` crée les tables et les rôles, `init_admin` et `init_demo` les comptes, `seed_data` les données fictives.
+- Sur une base neuve, le superutilisateur n'existe que si `ADMIN_USERNAME` et `ADMIN_PASSWORD` sont définies ; les autres comptes (Pharmaciens) sont à recréer depuis l'admin.
+- Changer de base déconnecte tout le monde (les sessions sont en base).
 
 ---
 
