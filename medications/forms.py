@@ -39,6 +39,8 @@ class MedicationForm(forms.ModelForm):
         price = self.cleaned_data.get(field)
         if price is not None and price <= 0:
             raise forms.ValidationError("Le prix doit être supérieur à 0.")
+        if price is not None and price != price.to_integral_value():
+            raise forms.ValidationError("Le prix doit être un nombre entier de francs CFA.")
         return price
 
     def clean_purchase_price(self):

@@ -14,7 +14,7 @@ from django.utils import timezone
 
 from medications.models import Medication
 from medications.stock import StockError, apply_movement
-from .models import Customer, Prescription, Sale, SaleItem, to_cents
+from .models import Customer, Prescription, Sale, SaleItem, to_fcfa
 
 # Remise maximale autorisée à la caisse, en pourcentage.
 MAX_DISCOUNT = Decimal("20")
@@ -152,12 +152,16 @@ def create_sale(user, data):
                 raise SaleError(f"Ordonnance requise pour {names} : sélectionnez le client.")
             prescription_info = _parse_prescription(data.get("prescription"))
 
-        subtotal = to_cents(sum(
-            (medications[med_id].selling_price * quantity for med_id, quantity in quantities.items()),
+        # Montants en francs CFA entiers. Le sous-total est la somme des
+        # sous-totaux de ligne arrondis, exactement ceux de la facture.
+        subtotal = sum(
+            (to_fcfa(medications[med_id].selling_price * quantity) for med_id, quantity in quantities.items()),
             Decimal("0"),
-        ))
-        total = subtotal - to_cents(subtotal * discount / 100)
-        amount_paid = to_cents(amount_paid)
+        )
+        total = subtotal - to_fcfa(subtotal * discount / 100)
+        # Un montant remis avec des décimales (estimation du navigateur) est
+        # ramené au franc près avant toute comparaison.
+        amount_paid = to_fcfa(amount_paid)
 
         if payment_method == "especes":
             if amount_paid < total:

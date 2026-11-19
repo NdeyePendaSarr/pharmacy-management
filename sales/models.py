@@ -6,12 +6,17 @@ from medications.models import Medication
 from django.utils import timezone
 from decimal import Decimal, ROUND_HALF_UP
 
-CENT = Decimal("0.01")
+FCFA = Decimal("1")
 
 
-def to_cents(value):
-    """Arrondit un montant au centime (arrondi commercial)."""
-    return Decimal(value).quantize(CENT, rounding=ROUND_HALF_UP)
+def to_fcfa(value):
+    """
+    Arrondit un montant au franc CFA près (arrondi commercial : 0,5 → 1).
+
+    Le FCFA n'a pas de subdivision : un montant enregistré, affiché ou
+    demandé au client est toujours un nombre entier de francs.
+    """
+    return Decimal(value).quantize(FCFA, rounding=ROUND_HALF_UP)
 
 
 class Customer(models.Model):
@@ -115,14 +120,14 @@ class Sale(models.Model):
         return f"Vente #{self.sale_number}"
     
     def save(self, *args, **kwargs):
-        # Calculer les montants (Decimal, arrondis au centime)
-        self.subtotal = to_cents(self.subtotal)
-        self.discount_amount = to_cents(Decimal(self.subtotal) * Decimal(self.discount_percentage) / 100)
+        # Calculer les montants (Decimal, arrondis au franc CFA)
+        self.subtotal = to_fcfa(self.subtotal)
+        self.discount_amount = to_fcfa(Decimal(self.subtotal) * Decimal(self.discount_percentage) / 100)
         self.total = self.subtotal - self.discount_amount
         
         # Monnaie rendue : seulement si le client a donné plus que le total
         # (jamais pour une vente à crédit).
-        paid = to_cents(self.amount_paid)
+        paid = to_fcfa(self.amount_paid)
         self.change_amount = max(Decimal("0"), paid - self.total) if self.payment_method != 'credit' else Decimal("0")
 
         if self.sale_number:
@@ -167,7 +172,7 @@ class SaleItem(models.Model):
     
     def save(self, *args, **kwargs):
         # Calculer le sous-total
-        self.subtotal = to_cents(Decimal(self.unit_price) * self.quantity)
+        self.subtotal = to_fcfa(Decimal(self.unit_price) * self.quantity)
         
         super().save(*args, **kwargs)
 

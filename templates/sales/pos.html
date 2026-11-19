@@ -442,10 +442,11 @@ function cartNeedsPrescription() {
 }
 
 // Estimation affichée à la caisse ; le montant qui fait foi est recalculé par le serveur.
+// Mêmes arrondis que le serveur : chaque ligne et la remise au franc CFA près.
 function currentTotals() {
-    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const subtotal = cart.reduce((sum, item) => sum + Math.round(item.price * item.quantity), 0);
     const discountPercent = parseFloat(document.getElementById('discountInput').value) || 0;
-    const discountAmount = (subtotal * discountPercent) / 100;
+    const discountAmount = Math.round((subtotal * discountPercent) / 100);
     return { subtotal, discountPercent, discountAmount, total: subtotal - discountAmount };
 }
 

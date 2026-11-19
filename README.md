@@ -90,7 +90,7 @@ Le navigateur n'envoie que des intentions : quels médicaments, combien, quelle 
 ```text
 Verrouillage des médicaments (SELECT … FOR UPDATE)
   → refus si périmé, stock insuffisant ou ordonnance manquante
-  → prix lus en base, totaux recalculés en Decimal, remise bornée
+  → prix lus en base, totaux recalculés en Decimal et arrondis au franc CFA, remise bornée
   → contrôle du paiement (espèces suffisantes, crédit disponible)
   → vente, lignes de vente, mouvements de sortie, ordonnance
 ```
@@ -160,11 +160,11 @@ Chaque application a un dossier `tests/`.
 
 ## 🧪 Tests et intégration continue
 
-**88 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
+**95 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
 
 | Domaine | Ce qui est vérifié |
 |---|---|
-| Prix et totaux | Prix falsifié ignoré, montants exacts en Decimal, remise hors limites refusée, total jamais négatif, quantités entières > 0, aucune fuite de message d'erreur interne |
+| Prix et totaux | Prix falsifié ignoré, montants exacts en Decimal et arrondis au franc CFA (paiement du montant affiché accepté, prix entiers), remise hors limites refusée, total jamais négatif, quantités entières > 0, aucune fuite de message d'erreur interne |
 | Accès | Inscription fermée, 403 pour un Vendeur sur la modification ou la suppression d'un médicament, données médicales masquées, compte sans rôle bloqué, déconnexion en POST, compte de démonstration idempotent |
 | XSS | Un médicament nommé `</script><script>alert(1)</script>` s'affiche comme du texte au tableau de bord et à la caisse |
 | Périmés et ordonnances | Périmé absent de la caisse et refusé par le serveur, client et ordonnance exigés, ordonnance liée à la vente |
@@ -203,7 +203,7 @@ python manage.py migrate          # crée aussi les groupes Pharmacien et Vendeu
 python manage.py createsuperuser
 python manage.py seed_data        # données de démonstration fictives (base vide uniquement)
 python manage.py runserver
-python manage.py test             # 88 tests
+python manage.py test             # 95 tests
 ```
 
 La feuille de style `static/css/output.css` est générée par Tailwind CSS à partir de `static/css/input.css` (voir `build.sh`).

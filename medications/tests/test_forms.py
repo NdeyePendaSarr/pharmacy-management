@@ -54,6 +54,13 @@ class MedicationFormTests(TestCase):
                     self.assert_refused(response, "supérieur à 0")
         self.assertFalse(Medication.objects.exists())
 
+    def test_prices_must_be_whole_francs(self):
+        for field in ("purchase_price", "selling_price"):
+            with self.subTest(field=field):
+                response = self.client.post(reverse("medication_create"), self.data(**{field: "999.99"}))
+                self.assert_refused(response, "nombre entier de francs CFA")
+        self.assertFalse(Medication.objects.exists())
+
     def test_selling_price_below_purchase_price_is_refused(self):
         response = self.client.post(reverse("medication_create"), self.data(selling_price="500"))
         self.assert_refused(response, "prix de vente doit être supérieur ou égal au prix d")
