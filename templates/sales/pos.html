@@ -239,7 +239,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 // Toutes les données (noms, DCI, panier) sont insérées avec textContent :
 // un nom de médicament ne peut jamais devenir du HTML ou du JavaScript.
 let cart = [];

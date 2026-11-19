@@ -12,9 +12,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from datetime import timedelta
 from pathlib import Path
-from decouple import config
+from decouple import Csv, config
 import dj_database_url
 import cloudinary
+from csp.constants import NONCE, NONE, SELF
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -28,11 +29,14 @@ SECRET_KEY = config('SECRET_KEY')  # obligatoire — définie dans .env (local) 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
-    '.onrender.com',  # Pour Render
-]
+# Noms d'hôte acceptés : liste séparée par des virgules dans ALLOWED_HOSTS
+# (render.yaml y met l'adresse exacte du service) ; en local, localhost.
+# Plus de joker « .onrender.com », qui acceptait n'importe quel service Render.
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+# Render fournit aussi l'adresse publique du service dans cette variable.
+_render_host = config('RENDER_EXTERNAL_HOSTNAME', default='')
+if _render_host and _render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_host)
 
 
 # Application definition
@@ -60,6 +64,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # En-tête Content-Security-Policy (voir CONTENT_SECURITY_POLICY).
+    'csp.middleware.CSPMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # AJOUTÉ pour les fichiers statiques
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -227,6 +233,26 @@ AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
 AXES_RESET_ON_SUCCESS = True
 AXES_LOCKOUT_TEMPLATE = 'users/lockout.html'
 AXES_CLIENT_IP_CALLABLE = 'users.security.client_ip'
+
+# Content-Security-Policy (django-csp), en développement comme en production.
+# Scripts : seulement ceux du site, Chart.js (jsDelivr) et les blocs <script>
+# portant le nonce de la requête ({{ request.csp_nonce }}) ; aucun attribut
+# onclick/onchange. Styles : 'unsafe-inline' reste nécessaire pour les
+# attributs style="" des gabarits, sans risque d'exécution de code.
+CONTENT_SECURITY_POLICY = {
+    "DIRECTIVES": {
+        "default-src": [SELF],
+        "script-src": [SELF, NONCE, "https://cdn.jsdelivr.net"],
+        "style-src": [SELF, "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://fonts.googleapis.com"],
+        "font-src": [SELF, "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com"],
+        "img-src": [SELF, "data:", "https://res.cloudinary.com"],
+        "connect-src": [SELF],
+        "object-src": [NONE],
+        "base-uri": [SELF],
+        "form-action": [SELF],
+        "frame-ancestors": [NONE],
+    },
+}
 
 # Tests : fichiers statiques sans manifeste (pas de collectstatic préalable).
 TEST_RUNNER = 'pharmanps_alou.test_runner.TestRunner'

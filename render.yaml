@@ -13,6 +13,9 @@ services:
         generateValue: true
       - key: DEBUG
         value: False
+      # Seule adresse publique acceptée (en-tête Host).
+      - key: ALLOWED_HOSTS
+        value: pharmanps-aloucoding-b8ex.onrender.com
       # Base PostgreSQL hébergée hors de Render (Neon). L'URL de connexion
       # directe (sans « -pooler », avec ?sslmode=require) se saisit dans le
       # tableau de bord Render (sync: false) : elle n'est jamais commitée.
