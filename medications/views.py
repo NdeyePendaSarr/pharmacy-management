@@ -4,11 +4,14 @@ from django.contrib import messages
 from django.db import transaction
 from datetime import timedelta
 
-from django.db.models import F, Q, ProtectedError
+from django.db.models import Count, F, Q, ProtectedError
 from django.utils import timezone
 from .models import Medication, Category, StockMovement
 from .forms import CategoryForm, MedicationForm, StockMovementForm
 from .stock import StockError, apply_movement
+from pharmanps_alou.pagination import paginate
+
+MEDICATIONS_PER_PAGE = 24
 
 
 @login_required
@@ -47,8 +50,11 @@ def medication_list(request):
     elif stock_filter == 'expiring':
         medications = medications.filter(expiry_date__gt=today, expiry_date__lte=today + timedelta(days=30))
     
+    page_obj = paginate(request, medications, MEDICATIONS_PER_PAGE)
+
     context = {
-        'medications': medications,
+        'medications': page_obj,
+        'page_obj': page_obj,
         'categories': categories,
         'search': search,
         'category_filter': category_filter,
@@ -149,7 +155,8 @@ def medication_delete(request, pk):
 @permission_required('medications.view_category', raise_exception=True)
 def category_list(request):
     """Liste des catégories"""
-    categories = Category.objects.all()
+    # Nombre de médicaments par catégorie calculé en une seule requête.
+    categories = Category.objects.annotate(medication_count=Count('medications'))
     
     # 🚨 DÉBUT DE LA MODIFICATION 🚨
     # Calcule le nombre total de médicaments dans la base de données

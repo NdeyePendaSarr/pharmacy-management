@@ -163,7 +163,7 @@ Chaque application a un dossier `tests/`.
 
 ## 🧪 Tests et intégration continue
 
-**127 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
+**135 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
 
 | Domaine | Ce qui est vérifié |
 |---|---|
@@ -175,7 +175,7 @@ Chaque application a un dossier `tests/`.
 | Ventes | Numéros uniques en concurrence, monnaie, espèces insuffisantes, crédit (client, plafond, encours), coût d'achat figé, **double envoi** (même jeton de caisse, y compris en simultané) = une seule vente |
 | Formulaires | Prix, quantités, code-barres unique, dates, catégorie en double, champs sensibles non modifiables sans permission |
 | Réglages | Stockages de production, `check --deploy` sans avertissement, verrouillage après 5 échecs de connexion |
-| Performance | Tableau de bord en 9 requêtes, quel que soit le volume (`assertNumQueries`) |
+| Performance | Tableau de bord en 9 requêtes, quel que soit le volume (`assertNumQueries`) ; listes des ventes, clients, médicaments et catégories en un nombre de requêtes constant ; pagination qui garde recherche et filtres |
 | Déploiement | `init_admin` et `seed_data` reconstruisent la démo sur une base vide, sans doublon s'ils sont relancés |
 
 Les tests de concurrence nécessitent PostgreSQL ; ils sont ignorés avec SQLite.
@@ -206,7 +206,7 @@ python manage.py migrate          # crée aussi les groupes Pharmacien et Vendeu
 python manage.py createsuperuser
 python manage.py seed_data        # données de démonstration fictives (base vide uniquement)
 python manage.py runserver
-python manage.py test             # 127 tests
+python manage.py test             # 135 tests
 ```
 
 La feuille de style `static/css/output.css` est générée par Tailwind CSS à partir de `static/css/input.css` (voir `build.sh`).
@@ -248,13 +248,12 @@ La base n'est plus une base Render gratuite (elle expire au bout de quelques sem
 
 - Les **points de fidélité** sont enregistrés et affichés, mais aucune règle ne les attribue encore.
 - Le statut de vente « annulée » existe, mais il n'y a pas encore de parcours d'annulation ni de remise en stock.
-- Les listes (médicaments, ventes, clients) ne sont pas paginées.
+- La caisse charge encore d'un coup tous les médicaments vendables et tous les clients (les autres listes sont paginées).
 
 ## 🔮 Pistes d'amélioration
 
 - Annulation et remboursement d'une vente, avec mouvement de retour en stock et diminution de l'encours de crédit.
 - Règles d'attribution des points de fidélité.
-- Pagination des listes.
 - Règlement de l'encours de crédit d'un client depuis l'interface.
 
 ---

@@ -10,11 +10,15 @@ from django.utils.dateparse import parse_date
 from .models import Sale, Customer
 from . import services
 from .forms import CustomerForm
+from pharmanps_alou.pagination import paginate
 from medications.models import Medication
 import json
 import logging
 
 logger = logging.getLogger(__name__)
+
+SALES_PER_PAGE = 25
+CUSTOMERS_PER_PAGE = 24
 
 
 @login_required
@@ -100,7 +104,12 @@ def create_sale(request):
 def sale_list(request):
     """Liste des ventes (Historique)"""
     # Filtrer UNIQUEMENT les ventes COMPLÉTÉES pour l'historique
-    sales = Sale.objects.filter(status='completee').order_by('-created_at')
+    # Client et vendeur chargés avec la vente : pas de requête par ligne.
+    sales = (
+        Sale.objects.filter(status='completee')
+        .select_related('customer', 'created_by')
+        .order_by('-created_at')
+    )
     
     # Filtres
     search = request.GET.get('search', '')
@@ -125,8 +134,11 @@ def sale_list(request):
     # Statistiques
     total_sales = sales.aggregate(total=Sum('total'))['total'] or 0
     
+    page_obj = paginate(request, sales, SALES_PER_PAGE)
+
     context = {
-        'sales': sales,
+        'sales': page_obj,
+        'page_obj': page_obj,
         'total_sales': total_sales,
         'search': search,
         'date_filter': date_filter,
@@ -172,8 +184,11 @@ def customer_list(request):
             Q(phone__icontains=search)
         )
     
+    page_obj = paginate(request, customers, CUSTOMERS_PER_PAGE)
+
     context = {
-        'customers': customers,
+        'customers': page_obj,
+        'page_obj': page_obj,
         'search': search,
     }
     return render(request, 'sales/customer_list.html', context)
@@ -230,11 +245,17 @@ def customer_sales(request, pk):
     customer = get_object_or_404(Customer, pk=pk)
     
     # Récupère toutes les ventes complétées pour ce client
-    all_sales = customer.sales.filter(status='completee').order_by('-created_at')
-    
+    all_sales = (
+        customer.sales.filter(status='completee')
+        .select_related('customer', 'created_by')
+        .order_by('-created_at')
+    )
+    page_obj = paginate(request, all_sales, SALES_PER_PAGE)
+
     context = {
         'customer': customer,
-        'sales': all_sales,
+        'sales': page_obj,
+        'page_obj': page_obj,
         'total_sales': all_sales.aggregate(total=Sum('total'))['total'] or 0,
     }
     return render(request, 'sales/sale_list.html', context) # Utilisation temporaire de sale_list.html

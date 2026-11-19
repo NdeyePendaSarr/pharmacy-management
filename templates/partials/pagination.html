@@ -1,0 +1,20 @@
+{% comment %}
+Liens de pagination. Attend `page_obj` ; {% querystring %} garde les autres
+paramètres de l'URL (recherche, filtres) en changeant seulement `page`.
+{% endcomment %}
+{% if page_obj.has_other_pages %}
+<nav class="mt-8 flex flex-wrap items-center justify-center gap-3" aria-label="Pagination">
+    {% if page_obj.has_previous %}
+    <a href="{% querystring page=1 %}" class="px-4 py-2 rounded-xl bg-white border-2 border-gray-200 text-gray-700 font-semibold hover:border-blue-500">« Première</a>
+    <a href="{% querystring page=page_obj.previous_page_number %}" rel="prev" class="px-4 py-2 rounded-xl bg-white border-2 border-gray-200 text-gray-700 font-semibold hover:border-blue-500">‹ Précédente</a>
+    {% endif %}
+    <span class="px-4 py-2 text-gray-700 font-semibold" aria-current="page">
+        Page {{ page_obj.number }} sur {{ page_obj.paginator.num_pages }}
+        <span class="text-gray-500 font-normal">({{ page_obj.paginator.count }} au total)</span>
+    </span>
+    {% if page_obj.has_next %}
+    <a href="{% querystring page=page_obj.next_page_number %}" rel="next" class="px-4 py-2 rounded-xl bg-white border-2 border-gray-200 text-gray-700 font-semibold hover:border-blue-500">Suivante ›</a>
+    <a href="{% querystring page=page_obj.paginator.num_pages %}" class="px-4 py-2 rounded-xl bg-white border-2 border-gray-200 text-gray-700 font-semibold hover:border-blue-500">Dernière »</a>
+    {% endif %}
+</nav>
+{% endif %}
