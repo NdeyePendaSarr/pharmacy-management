@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.db.models import Q, Sum
+from django.utils.dateparse import parse_date
 from .models import Sale, Customer
 from . import services
 from .forms import CustomerForm
@@ -108,9 +109,16 @@ def sale_list(request):
             Q(customer__last_name__icontains=search)
         )
     
-    date_filter = request.GET.get('date', '')
-    if date_filter:
-        sales = sales.filter(created_at__date=date_filter)
+    # Une date mal formée ou impossible (URL modifiée à la main) est ignorée.
+    date_filter = request.GET.get('date', '').strip()
+    try:
+        day = parse_date(date_filter) if date_filter else None
+    except ValueError:
+        day = None
+    if day is None:
+        date_filter = ''
+    else:
+        sales = sales.filter(created_at__date=day)
     
     # Statistiques
     total_sales = sales.aggregate(total=Sum('total'))['total'] or 0

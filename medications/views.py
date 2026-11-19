@@ -28,7 +28,11 @@ def medication_list(request):
         )
     
     # Filtres
-    category_filter = request.GET.get('category', '')
+    # Un identifiant de catégorie non numérique ou hors des limites d'un
+    # entier en base (URL modifiée à la main) est ignoré.
+    category_filter = request.GET.get('category', '').strip()
+    if not (category_filter.isascii() and category_filter.isdecimal() and len(category_filter) <= 18):
+        category_filter = ''
     if category_filter:
         medications = medications.filter(category_id=category_filter)
     

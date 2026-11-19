@@ -97,6 +97,8 @@ Verrouillage des médicaments (SELECT … FOR UPDATE)
 
 Si une étape échoue, rien n'est enregistré. Un message d'erreur inattendu n'est jamais renvoyé au navigateur : il est journalisé côté serveur.
 
+Chaque panier porte un **jeton** tiré par la caisse : un double clic ou une relance après une coupure réseau renvoie la vente déjà créée au lieu d'en enregistrer une seconde. Le bouton « Finaliser la vente » est aussi désactivé pendant l'envoi.
+
 ### Stock sans course
 Toute écriture du stock passe par [`medications/stock.py`](medications/stock.py) : verrou sur la ligne, contrôle « jamais sous zéro », mise à jour avec `F()`. Deux ventes simultanées du dernier article ne peuvent pas réussir toutes les deux. La base impose aussi `stock ≥ 0` et `quantité de mouvement > 0` (contraintes `CHECK`).
 
@@ -160,7 +162,7 @@ Chaque application a un dossier `tests/`.
 
 ## 🧪 Tests et intégration continue
 
-**95 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
+**107 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
 
 | Domaine | Ce qui est vérifié |
 |---|---|
@@ -169,7 +171,7 @@ Chaque application a un dossier `tests/`.
 | XSS | Un médicament nommé `</script><script>alert(1)</script>` s'affiche comme du texte au tableau de bord et à la caisse |
 | Périmés et ordonnances | Périmé absent de la caisse et refusé par le serveur, client et ordonnance exigés, ordonnance liée à la vente |
 | Stock | Sortie supérieure au stock refusée, ajustements dans les deux sens, historique égal au stock, **deux ventes et deux sorties simultanées** (fils d'exécution concurrents sur PostgreSQL) |
-| Ventes | Numéros uniques en concurrence, monnaie, espèces insuffisantes, crédit (client, plafond, encours), coût d'achat figé |
+| Ventes | Numéros uniques en concurrence, monnaie, espèces insuffisantes, crédit (client, plafond, encours), coût d'achat figé, **double envoi** (même jeton de caisse, y compris en simultané) = une seule vente |
 | Formulaires | Prix, quantités, code-barres unique, dates, catégorie en double, champs sensibles non modifiables sans permission |
 | Réglages | Stockages de production, `check --deploy` sans avertissement, verrouillage après 5 échecs de connexion |
 | Performance | Tableau de bord en 9 requêtes, quel que soit le volume (`assertNumQueries`) |
@@ -203,7 +205,7 @@ python manage.py migrate          # crée aussi les groupes Pharmacien et Vendeu
 python manage.py createsuperuser
 python manage.py seed_data        # données de démonstration fictives (base vide uniquement)
 python manage.py runserver
-python manage.py test             # 95 tests
+python manage.py test             # 107 tests
 ```
 
 La feuille de style `static/css/output.css` est générée par Tailwind CSS à partir de `static/css/input.css` (voir `build.sh`).
