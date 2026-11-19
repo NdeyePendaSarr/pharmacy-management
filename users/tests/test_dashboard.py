@@ -82,7 +82,8 @@ class MedicationStockFilterTests(TestCase):
         self.ok = make_medication(name="Normal", quantity=100, min_quantity=10)
 
     def names(self, stock_filter):
-        medications = self.client.get(reverse("medication_list"), {"stock": stock_filter}).context["medications"]
+        # Liste paginée : le paginateur reçoit un queryset filtré en base.
+        medications = self.client.get(reverse("medication_list"), {"stock": stock_filter}).context["page_obj"].paginator.object_list
         self.assertIsInstance(medications, QuerySet)
         return {med.name for med in medications}
 

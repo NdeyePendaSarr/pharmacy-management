@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.utils.functional import cached_property
 from cloudinary.models import CloudinaryField
 
 
@@ -118,7 +119,9 @@ class Medication(models.Model):
             return ((self.selling_price - self.purchase_price) / self.purchase_price) * 100
         return 0
     
-    @property
+    # Calculée une fois par objet : les gabarits l'appellent plusieurs fois,
+    # et la recherche d'image statique lit le disque.
+    @cached_property
     def image_display(self):
         """
         URL de l'image à afficher :
