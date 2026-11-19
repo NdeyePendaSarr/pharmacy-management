@@ -163,7 +163,7 @@ Chaque application a un dossier `tests/`.
 
 ## 🧪 Tests et intégration continue
 
-**135 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
+**141 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
 
 | Domaine | Ce qui est vérifié |
 |---|---|
@@ -174,6 +174,7 @@ Chaque application a un dossier `tests/`.
 | Stock | Sortie supérieure au stock refusée, ajustements dans les deux sens, historique égal au stock, **deux ventes et deux sorties simultanées** (fils d'exécution concurrents sur PostgreSQL) |
 | Ventes | Numéros uniques en concurrence, monnaie, espèces insuffisantes, crédit (client, plafond, encours), coût d'achat figé, **double envoi** (même jeton de caisse, y compris en simultané) = une seule vente |
 | Formulaires | Prix, quantités, code-barres unique, dates, catégorie en double, champs sensibles non modifiables sans permission |
+| Accessibilité | Chaque champ de formulaire a un libellé associé (`for`/`id` ou `aria-label`), messages de la caisse dans une zone `aria-live` au lieu d'`alert()`, boutons de paiement avec `aria-pressed`, menu limité aux liens autorisés pour le rôle |
 | Réglages | Stockages de production, `check --deploy` sans avertissement, verrouillage après 5 échecs de connexion |
 | Performance | Tableau de bord en 9 requêtes, quel que soit le volume (`assertNumQueries`) ; listes des ventes, clients, médicaments et catégories en un nombre de requêtes constant ; pagination qui garde recherche et filtres |
 | Déploiement | `init_admin` et `seed_data` reconstruisent la démo sur une base vide, sans doublon s'ils sont relancés |
@@ -206,7 +207,7 @@ python manage.py migrate          # crée aussi les groupes Pharmacien et Vendeu
 python manage.py createsuperuser
 python manage.py seed_data        # données de démonstration fictives (base vide uniquement)
 python manage.py runserver
-python manage.py test             # 135 tests
+python manage.py test             # 141 tests
 ```
 
 La feuille de style `static/css/output.css` est générée par Tailwind CSS à partir de `static/css/input.css` (voir `build.sh`).

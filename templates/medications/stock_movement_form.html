@@ -54,14 +54,14 @@
                     <div class="p-8 space-y-8">
                         {% include 'partials/form_errors.html' %}
                         <div class="group">
-                            <label class="flex items-center text-sm font-bold text-gray-800 mb-3 uppercase tracking-wide">
+                            <label for="id_movement_type" class="flex items-center text-sm font-bold text-gray-800 mb-3 uppercase tracking-wide">
                                 <span class="bg-orange-100 text-orange-600 w-10 h-10 rounded-xl flex items-center justify-center mr-3">
                                     <i class="fas fa-list text-sm"></i>
                                 </span>
                                 Type de mouvement *
                             </label>
                             <div class="relative">
-                                <select 
+                                <select id="id_movement_type" 
                                     name="movement_type" 
                                     required
                                     class="w-full px-6 py-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-orange-200 focus:border-orange-500 transition-all duration-300 text-gray-800 font-semibold hover:border-gray-300 appearance-none bg-white cursor-pointer"
@@ -78,14 +78,14 @@
                         </div>
         
                         <div class="group">
-                            <label class="flex items-center text-sm font-bold text-gray-800 mb-3 uppercase tracking-wide">
+                            <label for="id_quantity" class="flex items-center text-sm font-bold text-gray-800 mb-3 uppercase tracking-wide">
                                 <span class="bg-orange-100 text-orange-600 w-10 h-10 rounded-xl flex items-center justify-center mr-3">
                                     <i class="fas fa-hashtag text-sm"></i>
                                 </span>
                                 Quantité *
                             </label>
                             <div class="relative">
-                                <input 
+                                <input id="id_quantity" 
                                     type="number" 
                                     name="quantity" 
                                     required
@@ -101,7 +101,7 @@
                         </div>
         
                         <div class="group">
-                            <label class="flex items-center text-sm font-bold text-gray-800 mb-3 uppercase tracking-wide">
+                            <label for="id_reference" class="flex items-center text-sm font-bold text-gray-800 mb-3 uppercase tracking-wide">
                                 <span class="bg-orange-100 text-orange-600 w-10 h-10 rounded-xl flex items-center justify-center mr-3">
                                     <i class="fas fa-file-invoice text-sm"></i>
                                 </span>
@@ -109,7 +109,7 @@
                                 <span class="ml-2 text-xs text-gray-500 normal-case">(optionnel)</span>
                             </label>
                             <div class="relative">
-                                <input 
+                                <input id="id_reference" 
                                     type="text" 
                                     name="reference" 
                                     maxlength="100"
@@ -124,7 +124,7 @@
                         </div>
         
                         <div class="group">
-                            <label class="flex items-center text-sm font-bold text-gray-800 mb-3 uppercase tracking-wide">
+                            <label for="id_reason" class="flex items-center text-sm font-bold text-gray-800 mb-3 uppercase tracking-wide">
                                 <span class="bg-orange-100 text-orange-600 w-10 h-10 rounded-xl flex items-center justify-center mr-3">
                                     <i class="fas fa-comment-alt text-sm"></i>
                                 </span>
@@ -132,7 +132,7 @@
                                 <span class="ml-2 text-xs text-gray-500 normal-case">(optionnel)</span>
                             </label>
                             <div class="relative">
-                                <textarea 
+                                <textarea id="id_reason" 
                                     name="reason" 
                                     rows="5"
                                     class="w-full px-6 py-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-orange-200 focus:border-orange-500 transition-all duration-300 text-gray-800 font-medium placeholder-gray-400 hover:border-gray-300 resize-none"
