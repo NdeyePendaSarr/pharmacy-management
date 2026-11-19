@@ -13,18 +13,14 @@ services:
         generateValue: true
       - key: DEBUG
         value: False
+      # Base PostgreSQL hébergée hors de Render (Neon). L'URL de connexion
+      # directe (sans « -pooler », avec ?sslmode=require) se saisit dans le
+      # tableau de bord Render (sync: false) : elle n'est jamais commitée.
       - key: DATABASE_URL
-        fromDatabase:
-          name: pharmanps-db
-          property: connectionString
+        sync: false
       # Compte de démonstration (rôle Vendeur), créé par init_demo au build.
       # Le mot de passe se saisit dans le tableau de bord Render (sync: false).
       - key: DEMO_USERNAME
         value: demo
       - key: DEMO_PASSWORD
         sync: false
-
-databases:
-  - name: pharmanps-db
-    plan: free
-    region: frankfurt

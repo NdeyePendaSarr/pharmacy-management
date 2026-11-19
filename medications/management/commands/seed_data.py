@@ -32,10 +32,10 @@ class Command(BaseCommand):
             return
 
 
-        print("🚀 Debut du remplissage de la base de donnees...\n")
+        self.stdout.write("🚀 Debut du remplissage de la base de donnees...\n")
 
         # 1. CREER DES CATEGORIES
-        print("📦 Creation des categories...")
+        self.stdout.write("📦 Creation des categories...")
         categories_data = [
             {'name': 'Anti-asthmatiques', 'description': 'Medicaments pour traiter l\'asthme et les troubles respiratoires'},
             {'name': 'Antibiotiques', 'description': 'Medicaments contre les infections bacteriennes'},
@@ -56,12 +56,12 @@ class Command(BaseCommand):
                 defaults={'description': cat_data['description']}
             )
             categories[cat_data['name']] = cat
-            print(f"  ✅ {cat.name}")
+            self.stdout.write(f"  ✅ {cat.name}")
 
-        print(f"\n✅ {len(categories)} categories creees\n")
+        self.stdout.write(f"\n✅ {len(categories)} categories creees\n")
 
         # 2. CREER DES MEDICAMENTS
-        print("💊 Creation des medicaments...")
+        self.stdout.write("💊 Creation des medicaments...")
 
         # Obtenir l'utilisateur admin
         admin_user = User.objects.filter(is_superuser=True).order_by('id').first()
@@ -176,12 +176,12 @@ class Command(BaseCommand):
                 apply_movement(med, 'entrée', med_data['quantity'], user=admin_user,
                                reason="Stock initial (données de démonstration)")
             medications[med_data['name']] = med
-            print(f"  ✅ {med.name} - {med.dosage}")
+            self.stdout.write(f"  ✅ {med.name} - {med.dosage}")
 
-        print(f"\n✅ {len(medications)} medicaments crees\n")
+        self.stdout.write(f"\n✅ {len(medications)} medicaments crees\n")
 
         # 3. CREER DES CLIENTS
-        print("👥 Creation des clients...")
+        self.stdout.write("👥 Creation des clients...")
 
         customers_data = [
             {
@@ -253,12 +253,12 @@ class Command(BaseCommand):
                 defaults=cust_data
             )
             customers.append(customer)
-            print(f"  ✅ {customer.full_name} ({customer.phone})")
+            self.stdout.write(f"  ✅ {customer.full_name} ({customer.phone})")
 
-        print(f"\n✅ {len(customers)} clients crees\n")
+        self.stdout.write(f"\n✅ {len(customers)} clients crees\n")
 
         # 4. CREER DES VENTES
-        print("🛒 Creation de ventes d'exemple...")
+        self.stdout.write("🛒 Creation de ventes d'exemple...")
 
         # Les ventes passent par le même service que la caisse : prix lus en
         # base, stock décrémenté par un mouvement, ordonnance si nécessaire.
@@ -282,27 +282,27 @@ class Command(BaseCommand):
                 'items': [{'medication_id': medications[name].id, 'quantity': qty} for name, qty in demo['items']],
                 'prescription': demo.get('prescription'),
             })
-            print(f"  ✅ Vente #{sale.sale_number} - {sale.total} FCFA")
+            self.stdout.write(f"  ✅ Vente #{sale.sale_number} - {sale.total} FCFA")
 
-        print("\n✅ 3 ventes crees\n")
+        self.stdout.write("\n✅ 3 ventes crees\n")
 
         # 5. RESUME
-        print("=" * 60)
-        print("✅ BASE DE DONNEES REMPLIE AVEC SUCCES !")
-        print("=" * 60)
-        print("\n📊 STATISTIQUES :")
-        print(f"  • Categories : {Category.objects.count()}")
-        print(f"  • Medicaments : {Medication.objects.count()}")
-        print(f"  • Clients : {Customer.objects.count()}")
-        print(f"  • Ventes : {Sale.objects.count()}")
-        print(f"  • Medicaments en alerte stock : {Medication.objects.filter(quantity__lte=10).count()}")
-        print("\n🎯 Vous pouvez maintenant tester l'application !")
-        print("   Dashboard : http://127.0.0.1:8000/dashboard/")
-        print("   POS : http://127.0.0.1:8000/pos/")
-        print("   Medicaments : http://127.0.0.1:8000/medications/")
-        print("   Clients : http://127.0.0.1:8000/customers/")
-        print("   Ventes : http://127.0.0.1:8000/sales/")
-        print("\n" + "=" * 60)
+        self.stdout.write("=" * 60)
+        self.stdout.write("✅ BASE DE DONNEES REMPLIE AVEC SUCCES !")
+        self.stdout.write("=" * 60)
+        self.stdout.write("\n📊 STATISTIQUES :")
+        self.stdout.write(f"  • Categories : {Category.objects.count()}")
+        self.stdout.write(f"  • Medicaments : {Medication.objects.count()}")
+        self.stdout.write(f"  • Clients : {Customer.objects.count()}")
+        self.stdout.write(f"  • Ventes : {Sale.objects.count()}")
+        self.stdout.write(f"  • Medicaments en alerte stock : {Medication.objects.filter(quantity__lte=10).count()}")
+        self.stdout.write("\n🎯 Vous pouvez maintenant tester l'application !")
+        self.stdout.write("   Dashboard : http://127.0.0.1:8000/dashboard/")
+        self.stdout.write("   POS : http://127.0.0.1:8000/pos/")
+        self.stdout.write("   Medicaments : http://127.0.0.1:8000/medications/")
+        self.stdout.write("   Clients : http://127.0.0.1:8000/customers/")
+        self.stdout.write("   Ventes : http://127.0.0.1:8000/sales/")
+        self.stdout.write("\n" + "=" * 60)
 
 
         self.stdout.write(self.style.SUCCESS("Base de données remplie avec succès."))
