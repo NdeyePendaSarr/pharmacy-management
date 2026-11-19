@@ -46,6 +46,7 @@ L'inscription publique est **fermée** : les comptes sont créés par un adminis
 - Un compte sans groupe peut se connecter mais n'a accès à rien.
 - Après **5 échecs de connexion** pour un même identifiant depuis une même adresse IP, ce couple est bloqué 15 minutes (django-axes).
 - La déconnexion se fait uniquement en `POST`.
+- Dans l'**admin Django**, les ventes, lignes de vente et ordonnances sont en **consultation seule** (même pour un superutilisateur) et l'encours de crédit d'un client n'est pas modifiable : seule la caisse les écrit, avec le stock et le crédit dans la même transaction.
 
 ---
 
@@ -162,12 +163,12 @@ Chaque application a un dossier `tests/`.
 
 ## 🧪 Tests et intégration continue
 
-**116 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
+**120 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
 
 | Domaine | Ce qui est vérifié |
 |---|---|
 | Prix et totaux | Prix falsifié ignoré, montants exacts en Decimal et arrondis au franc CFA (paiement du montant affiché accepté, prix entiers), remise hors limites refusée, total jamais négatif, quantités entières > 0, aucune fuite de message d'erreur interne |
-| Accès | Inscription fermée, 403 pour un Vendeur sur la modification ou la suppression d'un médicament, données médicales masquées, compte sans rôle bloqué, déconnexion en POST, compte de démonstration idempotent |
+| Accès | Inscription fermée, 403 pour un Vendeur sur la modification ou la suppression d'un médicament, données médicales masquées, compte sans rôle bloqué, déconnexion en POST, compte de démonstration idempotent, admin : ventes, lignes et ordonnances en lecture seule et encours de crédit non modifiable, même pour un superutilisateur |
 | XSS | Un médicament nommé `</script><script>alert(1)</script>` s'affiche comme du texte au tableau de bord et à la caisse |
 | Périmés et ordonnances | Périmé absent de la caisse et refusé par le serveur, client et ordonnance exigés, ordonnance de plus de 3 mois refusée (fins de mois comprises), ordonnance liée à la vente et affichée sur la facture |
 | Stock | Sortie supérieure au stock refusée, ajustements dans les deux sens, historique égal au stock, **deux ventes et deux sorties simultanées** (fils d'exécution concurrents sur PostgreSQL) |
@@ -205,7 +206,7 @@ python manage.py migrate          # crée aussi les groupes Pharmacien et Vendeu
 python manage.py createsuperuser
 python manage.py seed_data        # données de démonstration fictives (base vide uniquement)
 python manage.py runserver
-python manage.py test             # 116 tests
+python manage.py test             # 120 tests
 ```
 
 La feuille de style `static/css/output.css` est générée par Tailwind CSS à partir de `static/css/input.css` (voir `build.sh`).
