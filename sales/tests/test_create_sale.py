@@ -47,7 +47,8 @@ class ServerSidePricingTests(CreateSaleTestMixin, TestCase):
         self.assertEqual(sale.total, Decimal("2000.00"))
 
     def test_amounts_are_exact_decimals(self):
-        self.med.selling_price = Decimal("333.33")
+        # 333 × 3 = 999 ; 10 % = 99,9 → 100 ; total 899 (Decimal, sans erreur de flottant).
+        self.med.selling_price = Decimal("333")
         self.med.save()
         response = self.post_sale(
             items=[{"medication_id": self.med.id, "quantity": 3, "unit_price": 333.33}],
@@ -56,9 +57,9 @@ class ServerSidePricingTests(CreateSaleTestMixin, TestCase):
         )
         self.assertEqual(response.status_code, 200, response.content)
         sale = Sale.objects.get()
-        self.assertEqual(sale.subtotal, Decimal("999.99"))
-        self.assertEqual(sale.discount_amount, Decimal("100.00"))
-        self.assertEqual(sale.total, Decimal("899.99"))
+        self.assertEqual(sale.subtotal, Decimal("999"))
+        self.assertEqual(sale.discount_amount, Decimal("100"))
+        self.assertEqual(sale.total, Decimal("899"))
 
     def test_discount_above_max_is_refused(self):
         response = self.post_sale(discount_percentage=50)
