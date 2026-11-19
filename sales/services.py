@@ -5,10 +5,11 @@ Règle d'or : le navigateur n'envoie que des intentions (quels médicaments,
 combien, quel mode de paiement). Tous les montants sont recalculés ici à
 partir des prix enregistrés en base, en Decimal.
 """
+import uuid
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
@@ -87,15 +88,59 @@ def _parse_prescription(raw):
     return doctor_name, prescription_date
 
 
+class _AlreadyCreated(Exception):
+    """Une vente portant ce jeton a été validée pendant que l'on attendait les verrous."""
+
+
+def _parse_token(raw):
+    """Jeton de la caisse (UUID) ; absent pour les ventes créées hors caisse."""
+    if raw in (None, ""):
+        return None
+    try:
+        return uuid.UUID(str(raw))
+    except ValueError:
+        raise SaleError("Requête invalide.")
+
+
+def _sale_with_token(user, token):
+    sale = Sale.objects.filter(client_token=token).first()
+    if sale is not None and sale.created_by_id != getattr(user, "pk", None):
+        # Jeton d'un autre utilisateur : on ne révèle pas sa vente.
+        raise SaleError("Requête invalide.")
+    return sale
+
+
 def create_sale(user, data):
     """
     Crée une vente complète à partir des données de la caisse.
 
     Lève SaleError pour toute donnée refusée ; rien n'est écrit dans ce cas.
+
+    Idempotence : si `client_token` désigne une vente déjà enregistrée par
+    cet utilisateur (double clic, relance après une coupure réseau), cette
+    vente est renvoyée telle quelle, sans nouvelle écriture.
     """
     if not isinstance(data, dict):
         raise SaleError("Requête invalide.")
 
+    token = _parse_token(data.get("client_token"))
+    if token is not None:
+        existing = _sale_with_token(user, token)
+        if existing is not None:
+            return existing
+
+    try:
+        return _create_sale(user, data, token)
+    except (_AlreadyCreated, IntegrityError):
+        # Deux requêtes simultanées avec le même jeton : la seconde est
+        # annulée en entier (transaction) et renvoie la vente de la première.
+        existing = _sale_with_token(user, token) if token is not None else None
+        if existing is None:
+            raise
+        return existing
+
+
+def _create_sale(user, data, token):
     quantities = _parse_items(data.get("items"))
 
     discount = _to_decimal(data.get("discount_percentage", 0) or 0, "Remise")
@@ -132,6 +177,10 @@ def create_sale(user, data):
         }
         if len(medications) != len(quantities):
             raise SaleError("Un médicament du panier est introuvable.")
+        # Une requête jumelle a pu valider la vente pendant que l'on attendait
+        # ces verrous : on le vérifie avant de contrôler un stock déjà diminué.
+        if token is not None and Sale.objects.filter(client_token=token).exists():
+            raise _AlreadyCreated
         today = timezone.localdate()
         for med_id, quantity in quantities.items():
             med = medications[med_id]
@@ -188,6 +237,7 @@ def create_sale(user, data):
             amount_paid=amount_paid,
             created_by=user,
             status="completee",
+            client_token=token,
         )
         sale.save()
 

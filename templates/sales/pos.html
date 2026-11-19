@@ -244,6 +244,22 @@
 let cart = [];
 let selectedPaymentMethod = 'especes';
 
+// Jeton du panier : renvoyé avec la vente, il permet au serveur de
+// reconnaître un second envoi (double clic, relance après une coupure)
+// et de renvoyer la vente déjà créée. Il change dès que le panier change.
+function newSaleToken() {
+    if (window.crypto && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+let saleToken = newSaleToken();
+let saleInProgress = false;
+
 const searchInput = document.getElementById('searchInput');
 const searchResults = document.getElementById('searchResults');
 const formatFcfa = (amount) => `${Math.round(amount)} FCFA`;
@@ -403,6 +419,7 @@ function updateCart() {
 
     cartCount.textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
     document.getElementById('prescriptionPanel').classList.toggle('hidden', !cartNeedsPrescription());
+    saleToken = newSaleToken();
     updateTotals();
 }
 
@@ -492,7 +509,13 @@ function updateChange() {
 
 // Finaliser la vente : seules les intentions sont envoyées (médicaments,
 // quantités, remise, paiement). Les prix et totaux sont calculés par le serveur.
-document.getElementById('completeBtn').addEventListener('click', async () => {
+const completeBtn = document.getElementById('completeBtn');
+
+completeBtn.addEventListener('click', async () => {
+    // Un seul envoi à la fois : les clics suivants sont ignorés.
+    if (saleInProgress) {
+        return;
+    }
     if (cart.length === 0) {
         alert('⚠️ Le panier est vide!');
         return;
@@ -528,7 +551,8 @@ document.getElementById('completeBtn').addEventListener('click', async () => {
         items: cart.map(item => ({ medication_id: item.id, quantity: item.quantity })),
         discount_percentage: discountPercent,
         payment_method: selectedPaymentMethod,
-        amount_paid: amountPaid
+        amount_paid: amountPaid,
+        client_token: saleToken
     };
     if (cartNeedsPrescription()) {
         saleData.prescription = {
@@ -536,6 +560,11 @@ document.getElementById('completeBtn').addEventListener('click', async () => {
             prescription_date: document.getElementById('prescriptionDate').value
         };
     }
+
+    saleInProgress = true;
+    completeBtn.disabled = true;
+    completeBtn.setAttribute('aria-busy', 'true');
+    completeBtn.classList.add('opacity-60', 'cursor-wait');
 
     try {
         const response = await fetch('/api/create-sale/', {
@@ -564,8 +593,15 @@ document.getElementById('completeBtn').addEventListener('click', async () => {
             alert(`❌ Erreur: ${data.message}`);
         }
     } catch (error) {
-        alert('❌ Erreur lors de la création de la vente!');
+        // Le panier et son jeton sont conservés : relancer ne crée pas de
+        // doublon si la vente avait en fait été enregistrée.
+        alert('❌ Erreur lors de la création de la vente! Vous pouvez réessayer sans risque de doublon.');
         console.error(error);
+    } finally {
+        saleInProgress = false;
+        completeBtn.disabled = false;
+        completeBtn.removeAttribute('aria-busy');
+        completeBtn.classList.remove('opacity-60', 'cursor-wait');
     }
 });
 

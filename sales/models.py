@@ -110,7 +110,13 @@ class Sale(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de vente")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="Vendu par")
     notes = models.TextField(blank=True, null=True, verbose_name="Notes")
-    
+    # Jeton tiré par la caisse pour chaque panier : une requête renvoyée
+    # (double clic, réseau coupé puis relance) retrouve la vente déjà créée
+    # au lieu d'en créer une seconde.
+    client_token = models.UUIDField(
+        null=True, blank=True, unique=True, editable=False, verbose_name="Jeton de la caisse"
+    )
+
     class Meta:
         verbose_name = "Vente"
         verbose_name_plural = "Ventes"
