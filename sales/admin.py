@@ -2,10 +2,31 @@ from django.contrib import admin
 from .models import Customer, Sale, SaleItem, Prescription
 
 
-class SaleItemInline(admin.TabularInline):
+class ReadOnlyAdminMixin:
+    """
+    Consultation seule dans l'admin, y compris pour un superutilisateur.
+
+    Une vente ne se crée qu'à la caisse (sales.services.create_sale), qui
+    met à jour le stock, l'encours de crédit et l'ordonnance dans la même
+    transaction. Ajouter, modifier ou supprimer une vente, une ligne ou une
+    ordonnance depuis l'admin contournerait ces règles : le stock et les
+    mouvements, les totaux ou la traçabilité deviendraient faux.
+    """
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class SaleItemInline(ReadOnlyAdminMixin, admin.TabularInline):
     model = SaleItem
     extra = 0
-    readonly_fields = ('subtotal',)
+    can_delete = False
 
 
 @admin.register(Customer)
@@ -13,25 +34,27 @@ class CustomerAdmin(admin.ModelAdmin):
     list_display = ('full_name', 'phone', 'customer_type', 'loyalty_points', 'current_credit', 'credit_limit')
     list_filter = ('customer_type',)
     search_fields = ('first_name', 'last_name', 'phone', 'email')
+    # L'encours de crédit n'évolue que par les ventes à crédit (caisse) :
+    # le modifier à la main effacerait ou inventerait une dette.
+    readonly_fields = ('current_credit',)
 
 
 @admin.register(Sale)
-class SaleAdmin(admin.ModelAdmin):
+class SaleAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     list_display = ('sale_number', 'customer', 'total', 'payment_method', 'status', 'created_at', 'created_by')
     list_filter = ('status', 'payment_method', 'created_at')
     search_fields = ('sale_number', 'customer__first_name', 'customer__last_name')
-    readonly_fields = ('sale_number', 'subtotal', 'discount_amount', 'total', 'change_amount', 'created_at')
     inlines = [SaleItemInline]
 
 
 @admin.register(SaleItem)
-class SaleItemAdmin(admin.ModelAdmin):
+class SaleItemAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     list_display = ('sale', 'medication', 'quantity', 'unit_price', 'subtotal')
     search_fields = ('sale__sale_number', 'medication__name')
 
 
 @admin.register(Prescription)
-class PrescriptionAdmin(admin.ModelAdmin):
+class PrescriptionAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     list_display = ('customer', 'doctor_name', 'prescription_date', 'sale', 'created_at')
     list_filter = ('prescription_date',)
     search_fields = ('customer__first_name', 'customer__last_name', 'doctor_name')
