@@ -28,6 +28,7 @@
                     <input 
                         type="text" 
                         id="searchInput"
+                        aria-label="Rechercher un médicament par nom, DCI ou code-barres"
                         placeholder="🔍 Rechercher un médicament (nom, DCI, code-barres)..."
                         class="w-full px-4 py-4 pl-14 border-2 border-gray-300 rounded-2xl placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-blue-200 focus:border-blue-500 transition-all duration-200 text-gray-900 font-medium shadow-lg"
                         autocomplete="off"
@@ -120,7 +121,7 @@
             
             <!-- Client -->
             <div class="mb-4">
-                <label class="block text-sm font-bold text-gray-700 mb-2">
+                <label for="customerSelect" class="block text-sm font-bold text-gray-700 mb-2">
                     <i class="fas fa-user mr-2 text-purple-500"></i>Client
                 </label>
                 <select id="customerSelect" class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all shadow-lg">
@@ -154,7 +155,7 @@
             
             <!-- Remise -->
             <div class="mb-4 pb-4 border-t-2 border-gray-200 pt-4">
-                <label class="block text-sm font-bold text-gray-700 mb-2">
+                <label for="discountInput" class="block text-sm font-bold text-gray-700 mb-2">
                     <i class="fas fa-percent mr-2 text-orange-500"></i>Remise (%)
                 </label>
                 <input 
@@ -185,23 +186,23 @@
             
             <!-- Mode de paiement avec icônes -->
             <div class="mb-4">
-                <label class="block text-sm font-bold text-gray-700 mb-3">
+                <p id="paymentMethodLabel" class="block text-sm font-bold text-gray-700 mb-3">
                     <i class="fas fa-credit-card mr-2 text-blue-500"></i>Mode de paiement
-                </label>
-                <div class="grid grid-cols-2 gap-3">
-                    <button class="payment-method-btn active border-3 border-blue-600 bg-gradient-to-br from-blue-50 to-blue-100 text-blue-700 px-4 py-3 rounded-xl font-bold hover:shadow-xl transition-all transform hover:scale-105" data-method="especes">
+                </p>
+                <div class="grid grid-cols-2 gap-3" role="group" aria-labelledby="paymentMethodLabel">
+                    <button type="button" aria-pressed="true" class="payment-method-btn active border-3 border-blue-600 bg-gradient-to-br from-blue-50 to-blue-100 text-blue-700 px-4 py-3 rounded-xl font-bold hover:shadow-xl transition-all transform hover:scale-105" data-method="especes">
                         <i class="fas fa-money-bill-wave text-xl block mb-1"></i>
                         <span class="text-xs">Espèces</span>
                     </button>
-                    <button class="payment-method-btn border-2 border-gray-300 bg-white px-4 py-3 rounded-xl font-bold hover:shadow-xl transition-all transform hover:scale-105" data-method="carte">
+                    <button type="button" aria-pressed="false" class="payment-method-btn border-2 border-gray-300 bg-white px-4 py-3 rounded-xl font-bold hover:shadow-xl transition-all transform hover:scale-105" data-method="carte">
                         <i class="fas fa-credit-card text-xl block mb-1"></i>
                         <span class="text-xs">Carte</span>
                     </button>
-                    <button class="payment-method-btn border-2 border-gray-300 bg-white px-4 py-3 rounded-xl font-bold hover:shadow-xl transition-all transform hover:scale-105" data-method="mobile_money">
+                    <button type="button" aria-pressed="false" class="payment-method-btn border-2 border-gray-300 bg-white px-4 py-3 rounded-xl font-bold hover:shadow-xl transition-all transform hover:scale-105" data-method="mobile_money">
                         <i class="fas fa-mobile-alt text-xl block mb-1"></i>
                         <span class="text-xs">Mobile Money</span>
                     </button>
-                    <button class="payment-method-btn border-2 border-gray-300 bg-white px-4 py-3 rounded-xl font-bold hover:shadow-xl transition-all transform hover:scale-105" data-method="credit">
+                    <button type="button" aria-pressed="false" class="payment-method-btn border-2 border-gray-300 bg-white px-4 py-3 rounded-xl font-bold hover:shadow-xl transition-all transform hover:scale-105" data-method="credit">
                         <i class="fas fa-handshake text-xl block mb-1"></i>
                         <span class="text-xs">Crédit</span>
                     </button>
@@ -210,7 +211,7 @@
             
             <!-- Montant payé -->
             <div id="amountPaidContainer" class="mb-4">
-                <label class="block text-sm font-bold text-gray-700 mb-2">
+                <label for="amountPaid" class="block text-sm font-bold text-gray-700 mb-2">
                     <i class="fas fa-wallet mr-2 text-green-500"></i>Montant payé
                 </label>
                 <input 
@@ -226,6 +227,9 @@
                 </p>
             </div>
             
+            <!-- Messages de la caisse (annoncés par les lecteurs d'écran) -->
+            <div id="posMessage" class="hidden mb-4 rounded-2xl border-2 p-4 text-sm font-semibold" role="status" aria-live="polite" aria-atomic="true"></div>
+
             <!-- Boutons d'action avec animations -->
             <div class="space-y-3">
                 <button id="completeBtn" class="w-full bg-gradient-to-r from-green-600 via-emerald-600 to-green-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-4 rounded-2xl font-extrabold transition-all transform hover:scale-105 shadow-2xl text-lg animate-pulse hover:animate-none">
@@ -260,6 +264,32 @@ function newSaleToken() {
 }
 let saleToken = newSaleToken();
 let saleInProgress = false;
+
+// Messages affichés dans la page (au lieu de fenêtres alert() bloquantes) :
+// la zone est annoncée par les lecteurs d'écran (aria-live).
+const posMessage = document.getElementById('posMessage');
+const MESSAGE_STYLES = {
+    error: ['bg-red-50', 'border-red-300', 'text-red-800'],
+    success: ['bg-green-50', 'border-green-300', 'text-green-800'],
+};
+function showMessage(text, kind = 'error', link = null) {
+    posMessage.classList.remove('hidden', ...MESSAGE_STYLES.error, ...MESSAGE_STYLES.success);
+    posMessage.classList.add(...MESSAGE_STYLES[kind]);
+    posMessage.replaceChildren(document.createTextNode(text));
+    if (link) {
+        const a = document.createElement('a');
+        a.href = link.href;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.className = 'ml-2 underline font-bold';
+        a.textContent = link.text;
+        posMessage.append(a);
+    }
+}
+function clearMessage() {
+    posMessage.classList.add('hidden');
+    posMessage.replaceChildren();
+}
 
 const searchInput = document.getElementById('searchInput');
 const searchResults = document.getElementById('searchResults');
@@ -351,7 +381,7 @@ function addToCart(element) {
         if (existingItem.quantity < stock) {
             existingItem.quantity++;
         } else {
-            alert('⚠️ Stock insuffisant!');
+            showMessage(`Stock insuffisant pour ${name}.`);
             return;
         }
     } else {
@@ -360,6 +390,7 @@ function addToCart(element) {
 
     searchInput.value = '';
     searchResults.classList.add('hidden');
+    clearMessage();  // un nouvel article efface le message précédent
     updateCart();
 }
 
@@ -434,7 +465,7 @@ function increaseQuantity(index) {
         cart[index].quantity++;
         updateCart();
     } else {
-        alert('⚠️ Stock insuffisant!');
+        showMessage(`Stock insuffisant pour ${cart[index].name}.`);
     }
 }
 
@@ -450,7 +481,7 @@ function updateQuantity(index, value) {
     if (qty > 0 && qty <= cart[index].stock) {
         cart[index].quantity = qty;
     } else {
-        alert('⚠️ Quantité invalide!');
+        showMessage(`Quantité invalide : entre 1 et ${cart[index].stock}.`);
     }
     updateCart();
 }
@@ -486,6 +517,8 @@ document.querySelectorAll('.payment-method-btn').forEach(btn => {
             b.classList.add('border-gray-300', 'bg-white', 'border-2');
         });
 
+        document.querySelectorAll('.payment-method-btn').forEach(b => b.setAttribute('aria-pressed', 'false'));
+        this.setAttribute('aria-pressed', 'true');
         this.classList.add('active', 'border-blue-600', 'bg-gradient-to-br', 'from-blue-50', 'to-blue-100', 'text-blue-700', 'border-3');
         this.classList.remove('border-gray-300', 'bg-white', 'border-2');
 
@@ -518,7 +551,7 @@ completeBtn.addEventListener('click', async () => {
         return;
     }
     if (cart.length === 0) {
-        alert('⚠️ Le panier est vide!');
+        showMessage('Le panier est vide.');
         return;
     }
 
@@ -533,17 +566,17 @@ completeBtn.addEventListener('click', async () => {
     }
 
     if (selectedPaymentMethod === 'especes' && amountPaid < total) {
-        alert('⚠️ Le montant payé est insuffisant!');
+        showMessage('Le montant payé est insuffisant.');
         return;
     }
 
     const customerId = document.getElementById('customerSelect').value || null;
     if (selectedPaymentMethod === 'credit' && !customerId) {
-        alert('⚠️ Paiement à crédit : sélectionnez le client.');
+        showMessage('Paiement à crédit : sélectionnez le client.');
         return;
     }
     if (cartNeedsPrescription() && !customerId) {
-        alert('⚠️ Ordonnance requise : sélectionnez le client.');
+        showMessage('Ordonnance requise : sélectionnez le client.');
         return;
     }
 
@@ -580,9 +613,6 @@ completeBtn.addEventListener('click', async () => {
         const data = await response.json();
 
         if (data.success) {
-            alert(`✅ ${data.message}\n\n📄 Voulez-vous imprimer la facture?`);
-            window.open(`/sales/${data.sale_id}/invoice/`, '_blank');
-
             cart = [];
             document.getElementById('discountInput').value = 0;
             document.getElementById('amountPaid').value = '';
@@ -590,13 +620,15 @@ completeBtn.addEventListener('click', async () => {
             document.getElementById('doctorName').value = '';
             document.getElementById('prescriptionDate').value = '';
             updateCart();
+            // Message de réussite avec le lien vers la facture (plus de fenêtre surgissante).
+            showMessage(data.message, 'success', { href: `/sales/${data.sale_id}/invoice/`, text: 'Ouvrir la facture' });
         } else {
-            alert(`❌ Erreur: ${data.message}`);
+            showMessage(data.message);
         }
     } catch (error) {
         // Le panier et son jeton sont conservés : relancer ne crée pas de
         // doublon si la vente avait en fait été enregistrée.
-        alert('❌ Erreur lors de la création de la vente! Vous pouvez réessayer sans risque de doublon.');
+        showMessage('La vente n’a pas pu être envoyée (connexion ?). Vous pouvez réessayer sans risque de doublon.');
         console.error(error);
     } finally {
         saleInProgress = false;

@@ -32,7 +32,7 @@
                 <div class="space-y-8">
 
                     <div class="group">
-                        <label
+                        <label for="id_name"
                             class="flex items-center text-sm font-bold text-gray-800 mb-3 uppercase tracking-wide">
                             <span
                                 class="bg-purple-100 text-purple-600 w-8 h-8 rounded-lg flex items-center justify-center mr-3">
@@ -41,7 +41,7 @@
                             Nom de la catégorie *
                         </label>
                         <div class="relative">
-                            <input type="text" name="name" required maxlength="100" value="{{ form.name.value|default_if_none:'' }}"
+                            <input id="id_name" type="text" name="name" required maxlength="100" value="{{ form.name.value|default_if_none:'' }}"
                                 class="w-full px-6 py-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all duration-300 text-gray-800 font-medium placeholder-gray-400 hover:border-gray-300"
                                 placeholder="Ex: Antibiotiques, Antalgiques, Anti-asthmatiques...">
                             <div class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
@@ -51,7 +51,7 @@
                     </div>
 
                     <div class="group">
-                        <label
+                        <label for="id_description"
                             class="flex items-center text-sm font-bold text-gray-800 mb-3 uppercase tracking-wide">
                             <span
                                 class="bg-purple-100 text-purple-600 w-8 h-8 rounded-lg flex items-center justify-center mr-3">
@@ -60,7 +60,7 @@
                             Description
                         </label>
                         <div class="relative">
-                            <textarea name="description" rows="5"
+                            <textarea id="id_description" name="description" rows="5"
                                 class="w-full px-6 py-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all duration-300 text-gray-800 font-medium placeholder-gray-400 hover:border-gray-300 resize-none"
                                 placeholder="Décrivez brièvement cette catégorie et son utilité...">{{ form.description.value|default_if_none:'' }}</textarea>
                             <div class="absolute top-4 right-4 pointer-events-none">
