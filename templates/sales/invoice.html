@@ -511,7 +511,7 @@
     </style>
 </head>
 <body>
-    <button class="print-btn no-print" onclick="window.print()">
+    <button type="button" class="print-btn no-print" data-print>
         🖨️ Imprimer la facture
     </button>
 
@@ -630,9 +630,10 @@
         </div>
     </div>
 
-    <script>
-       
-        
+    <script nonce="{{ request.csp_nonce }}">
+        // Bouton d'impression (remplace onclick="…", interdit par la CSP).
+        document.querySelector('[data-print]').addEventListener('click', () => window.print());
+
         // Animation au chargement
         document.addEventListener('DOMContentLoaded', function() {
             const elements = document.querySelectorAll('.section, .invoice-header, .totals-row');

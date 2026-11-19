@@ -134,7 +134,7 @@ Le numéro est dérivé de l'identifiant de la vente (`V20261020-000123`) : il r
 | Backend | **Django 5.2** (Python 3.13) |
 | Base de données | **PostgreSQL** hébergé chez **Neon** (SQLite possible en développement) |
 | Frontend | Gabarits Django, **Tailwind CSS**, **Chart.js** |
-| Sécurité | Rôles par permissions Django, **django-axes**, HTTPS/HSTS |
+| Sécurité | Rôles par permissions Django, **django-axes**, HTTPS/HSTS, **Content-Security-Policy** (django-csp, nonces), SRI sur les CDN, hôte autorisé exact |
 | Médias | **Cloudinary** |
 | Fichiers statiques | **WhiteNoise** (compression, noms par empreinte) |
 | Tests et CI | Tests Django, **GitHub Actions** avec PostgreSQL |
@@ -163,13 +163,13 @@ Chaque application a un dossier `tests/`.
 
 ## 🧪 Tests et intégration continue
 
-**120 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
+**127 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
 
 | Domaine | Ce qui est vérifié |
 |---|---|
 | Prix et totaux | Prix falsifié ignoré, montants exacts en Decimal et arrondis au franc CFA (paiement du montant affiché accepté, prix entiers), remise hors limites refusée, total jamais négatif, quantités entières > 0, aucune fuite de message d'erreur interne |
 | Accès | Inscription fermée, 403 pour un Vendeur sur la modification ou la suppression d'un médicament, données médicales masquées, compte sans rôle bloqué, déconnexion en POST, compte de démonstration idempotent, admin : ventes, lignes et ordonnances en lecture seule et encours de crédit non modifiable, même pour un superutilisateur |
-| XSS | Un médicament nommé `</script><script>alert(1)</script>` s'affiche comme du texte au tableau de bord et à la caisse |
+| XSS | Un médicament nommé `</script><script>alert(1)</script>` s'affiche comme du texte au tableau de bord et à la caisse ; CSP stricte sur toutes les pages (admin comprise) : chaque script intégré porte le nonce, aucun attribut `onclick`/`onchange`, seuls les CDN autorisés, avec SRI ; un autre service `*.onrender.com` est refusé |
 | Périmés et ordonnances | Périmé absent de la caisse et refusé par le serveur, client et ordonnance exigés, ordonnance de plus de 3 mois refusée (fins de mois comprises), ordonnance liée à la vente et affichée sur la facture |
 | Stock | Sortie supérieure au stock refusée, ajustements dans les deux sens, historique égal au stock, **deux ventes et deux sorties simultanées** (fils d'exécution concurrents sur PostgreSQL) |
 | Ventes | Numéros uniques en concurrence, monnaie, espèces insuffisantes, crédit (client, plafond, encours), coût d'achat figé, **double envoi** (même jeton de caisse, y compris en simultané) = une seule vente |
@@ -206,7 +206,7 @@ python manage.py migrate          # crée aussi les groupes Pharmacien et Vendeu
 python manage.py createsuperuser
 python manage.py seed_data        # données de démonstration fictives (base vide uniquement)
 python manage.py runserver
-python manage.py test             # 120 tests
+python manage.py test             # 127 tests
 ```
 
 La feuille de style `static/css/output.css` est générée par Tailwind CSS à partir de `static/css/input.css` (voir `build.sh`).
@@ -227,6 +227,7 @@ Les trois commandes d'initialisation sont **idempotentes** : relancées, elles n
 | Variable | Rôle |
 |---|---|
 | `SECRET_KEY`, `DEBUG=False`, `DATABASE_URL` | Réglages Django |
+| `ALLOWED_HOSTS` | Adresse(s) acceptée(s), séparées par des virgules ; `render.yaml` y met l'adresse du service (Render fournit aussi `RENDER_EXTERNAL_HOSTNAME`, ajoutée automatiquement) |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Stockage des médias |
 | `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Superutilisateur créé par `init_admin` |
 | `DEMO_USERNAME`, `DEMO_PASSWORD` | Compte de démonstration Vendeur créé par `init_demo` |
