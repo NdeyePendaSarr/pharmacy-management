@@ -96,6 +96,15 @@
                         {{ sale.created_by.username }}
                     </p>
                 </div>
+                {% if sale.prescription %}
+                <div class="bg-amber-50 rounded-2xl p-4">
+                    <p class="text-sm text-amber-700 mb-1 font-semibold">Ordonnance</p>
+                    <p class="font-bold text-gray-900 text-sm md:text-base">
+                        <i class="fas fa-file-medical mr-2 text-amber-600"></i>
+                        {{ sale.prescription.doctor_name }}, du {{ sale.prescription.prescription_date|date:"d/m/Y" }}
+                    </p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

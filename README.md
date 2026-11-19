@@ -71,7 +71,7 @@ La quantité d'un mouvement est toujours positive, le sens vient de son type. Un
 ### 🛒 Caisse
 - Recherche instantanée par nom, DCI ou code-barres ; les médicaments **périmés** ou épuisés ne sont pas proposés.
 - Remise de 0 à 20 % ; paiement en espèces (monnaie rendue calculée), carte, mobile money ou **crédit**.
-- Médicament **sur ordonnance** : la vente exige un client et une ordonnance (médecin, date de prescription), enregistrée et liée à la vente.
+- Médicament **sur ordonnance** : la vente exige un client et une ordonnance (médecin, date de prescription **de moins de 3 mois**), enregistrée, liée à la vente et rappelée sur la fiche de vente et la facture.
 - Facture imprimable.
 
 ### 👥 Clients
@@ -89,7 +89,7 @@ Le navigateur n'envoie que des intentions : quels médicaments, combien, quelle 
 
 ```text
 Verrouillage des médicaments (SELECT … FOR UPDATE)
-  → refus si périmé, stock insuffisant ou ordonnance manquante
+  → refus si périmé, stock insuffisant ou ordonnance manquante ou expirée (plus de 3 mois)
   → prix lus en base, totaux recalculés en Decimal et arrondis au franc CFA, remise bornée
   → contrôle du paiement (espèces suffisantes, crédit disponible)
   → vente, lignes de vente, mouvements de sortie, ordonnance
@@ -162,14 +162,14 @@ Chaque application a un dossier `tests/`.
 
 ## 🧪 Tests et intégration continue
 
-**107 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
+**116 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `check --deploy` et `makemigrations --check`.
 
 | Domaine | Ce qui est vérifié |
 |---|---|
 | Prix et totaux | Prix falsifié ignoré, montants exacts en Decimal et arrondis au franc CFA (paiement du montant affiché accepté, prix entiers), remise hors limites refusée, total jamais négatif, quantités entières > 0, aucune fuite de message d'erreur interne |
 | Accès | Inscription fermée, 403 pour un Vendeur sur la modification ou la suppression d'un médicament, données médicales masquées, compte sans rôle bloqué, déconnexion en POST, compte de démonstration idempotent |
 | XSS | Un médicament nommé `</script><script>alert(1)</script>` s'affiche comme du texte au tableau de bord et à la caisse |
-| Périmés et ordonnances | Périmé absent de la caisse et refusé par le serveur, client et ordonnance exigés, ordonnance liée à la vente |
+| Périmés et ordonnances | Périmé absent de la caisse et refusé par le serveur, client et ordonnance exigés, ordonnance de plus de 3 mois refusée (fins de mois comprises), ordonnance liée à la vente et affichée sur la facture |
 | Stock | Sortie supérieure au stock refusée, ajustements dans les deux sens, historique égal au stock, **deux ventes et deux sorties simultanées** (fils d'exécution concurrents sur PostgreSQL) |
 | Ventes | Numéros uniques en concurrence, monnaie, espèces insuffisantes, crédit (client, plafond, encours), coût d'achat figé, **double envoi** (même jeton de caisse, y compris en simultané) = une seule vente |
 | Formulaires | Prix, quantités, code-barres unique, dates, catégorie en double, champs sensibles non modifiables sans permission |
@@ -205,7 +205,7 @@ python manage.py migrate          # crée aussi les groupes Pharmacien et Vendeu
 python manage.py createsuperuser
 python manage.py seed_data        # données de démonstration fictives (base vide uniquement)
 python manage.py runserver
-python manage.py test             # 107 tests
+python manage.py test             # 116 tests
 ```
 
 La feuille de style `static/css/output.css` est générée par Tailwind CSS à partir de `static/css/input.css` (voir `build.sh`).
