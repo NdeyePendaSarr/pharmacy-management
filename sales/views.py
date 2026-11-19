@@ -29,6 +29,8 @@ def pos_view(request):
         'medications': medications,
         'customers': customers,
         'max_discount': services.MAX_DISCOUNT,
+        'prescription_min_date': services.oldest_valid_prescription_date(),
+        'prescription_validity_months': services.PRESCRIPTION_VALIDITY_MONTHS,
     }
     return render(request, 'sales/pos.html', context)
 

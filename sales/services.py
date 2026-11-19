@@ -5,6 +5,7 @@ Règle d'or : le navigateur n'envoie que des intentions (quels médicaments,
 combien, quel mode de paiement). Tous les montants sont recalculés ici à
 partir des prix enregistrés en base, en Decimal.
 """
+import calendar
 import uuid
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -19,6 +20,24 @@ from .models import Customer, Prescription, Sale, SaleItem, to_fcfa
 
 # Remise maximale autorisée à la caisse, en pourcentage.
 MAX_DISCOUNT = Decimal("20")
+
+# Une ordonnance est acceptée pendant ce nombre de mois après sa date.
+PRESCRIPTION_VALIDITY_MONTHS = 3
+
+
+def oldest_valid_prescription_date(today=None):
+    """
+    Date de prescription la plus ancienne encore acceptée (incluse) :
+    même jour, PRESCRIPTION_VALIDITY_MONTHS mois plus tôt. Un jour qui
+    n'existe pas dans le mois visé (31 mai → 31 février) devient le dernier
+    jour de ce mois.
+    """
+    today = today or timezone.localdate()
+    month_index = today.year * 12 + (today.month - 1) - PRESCRIPTION_VALIDITY_MONTHS
+    year, month = divmod(month_index, 12)
+    month += 1
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, min(today.day, last_day))
 
 PAYMENT_METHODS = {code for code, _ in Sale.PAYMENT_METHODS}
 
@@ -83,8 +102,15 @@ def _parse_prescription(raw):
         prescription_date = date.fromisoformat(str(raw.get("prescription_date") or ""))
     except ValueError:
         raise SaleError("Ordonnance incomplète : la date de prescription est invalide.")
-    if prescription_date > timezone.localdate():
+    today = timezone.localdate()
+    if prescription_date > today:
         raise SaleError("Ordonnance invalide : la date de prescription est dans le futur.")
+    oldest = oldest_valid_prescription_date(today)
+    if prescription_date < oldest:
+        raise SaleError(
+            f"Ordonnance expirée : elle date du {prescription_date:%d/%m/%Y} et n'est valable que "
+            f"{PRESCRIPTION_VALIDITY_MONTHS} mois (au plus tôt le {oldest:%d/%m/%Y})."
+        )
     return doctor_name, prescription_date
 
 

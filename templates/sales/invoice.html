@@ -614,6 +614,9 @@
                     <p><strong>💰 Monnaie rendue :</strong> <span style="color: #10b981; font-weight: 700; font-size: 18px;">{{ sale.change_amount|floatformat:0 }} FCFA</span></p>
                     {% endif %}
                     <p><strong>👨‍💼 Vendu par :</strong> <span>{{ sale.created_by.username }}</span></p>
+                    {% if sale.prescription %}
+                    <p><strong>📋 Ordonnance :</strong> <span>{{ sale.prescription.doctor_name }}, du {{ sale.prescription.prescription_date|date:"d/m/Y" }}</span></p>
+                    {% endif %}
                 </div>
             </div>
 
