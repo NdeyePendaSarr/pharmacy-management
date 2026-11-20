@@ -31,6 +31,7 @@ ROUTES = {
     "stock_movement_create": (False, True),
     "pos": (True, False),
     "search_medication": (True, False),
+    "search_customer": (True, False),
     "create_sale": (True, True),
     "sale_list": (True, False),
     "sale_detail": (True, False),

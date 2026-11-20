@@ -18,6 +18,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 SALES_PER_PAGE = 25
+CUSTOMER_SEARCH_MIN_LENGTH = 2
+CUSTOMER_SEARCH_LIMIT = 10
 CUSTOMERS_PER_PAGE = 24
 
 
@@ -27,12 +29,11 @@ def pos_view(request):
     """Interface de Point de Vente (POS)"""
     # Seuls les médicaments en stock et non périmés sont proposés à la caisse.
     medications = Medication.objects.sellable().select_related('category')
-    # Les clients archivés ne sont pas proposés à la caisse.
-    customers = Customer.objects.active()
+    # Les clients ne sont plus tous chargés dans la page : la caisse les
+    # cherche à la demande (search_customer), quel que soit leur nombre.
     
     context = {
         'medications': medications,
-        'customers': customers,
         'max_discount': services.MAX_DISCOUNT,
         'prescription_min_date': services.oldest_valid_prescription_date(),
         'prescription_validity_months': services.PRESCRIPTION_VALIDITY_MONTHS,
@@ -68,6 +69,28 @@ def search_medication(request):
         return JsonResponse({'results': results})
     
     return JsonResponse({'results': []})
+
+
+@login_required
+@permission_required('sales.add_sale', raise_exception=True)
+def search_customer(request):
+    """
+    API de recherche de clients pour la caisse : nom, prénom ou téléphone.
+
+    Seuls les clients actifs (non archivés) sont proposés ; au plus
+    CUSTOMER_SEARCH_LIMIT résultats, et rien sous CUSTOMER_SEARCH_MIN_LENGTH
+    caractères. Aucune donnée médicale n'est renvoyée.
+    """
+    query = request.GET.get('q', '').strip()[:100]
+    if len(query) < CUSTOMER_SEARCH_MIN_LENGTH:
+        return JsonResponse({'results': []})
+
+    customers = Customer.objects.active().filter(
+        Q(first_name__icontains=query) | Q(last_name__icontains=query) | Q(phone__icontains=query)
+    ).order_by('last_name', 'first_name')[:CUSTOMER_SEARCH_LIMIT]
+    return JsonResponse({'results': [
+        {'id': c.id, 'name': c.full_name, 'phone': c.phone} for c in customers
+    ]})
 
 
 @login_required
