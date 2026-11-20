@@ -194,6 +194,8 @@ def _create_sale(user, data, token):
                 customer = Customer.objects.select_for_update().get(pk=int(customer_id))
             except (TypeError, ValueError, Customer.DoesNotExist):
                 raise SaleError("Client introuvable.")
+            if not customer.is_active:
+                raise SaleError(f"Le client {customer.full_name} est archivé : réactivez-le avant de lui vendre.")
 
         # Verrouille les médicaments (ordre stable pour éviter les interblocages)
         # et vérifie le stock avant toute écriture.

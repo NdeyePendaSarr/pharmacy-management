@@ -19,8 +19,24 @@ def to_fcfa(value):
     return Decimal(value).quantize(FCFA, rounding=ROUND_HALF_UP)
 
 
+class CustomerQuerySet(models.QuerySet):
+    def active(self):
+        """Clients utilisables à la caisse et visibles dans la liste (non archivés)."""
+        return self.filter(is_active=True)
+
+
 class Customer(models.Model):
-    """Modèle pour les clients"""
+    """
+    Modèle pour les clients.
+
+    Un client n'est jamais supprimé tant qu'il a un historique : ses ventes
+    et ses ordonnances le protègent (on_delete=PROTECT) et l'admin refuse la
+    suppression s'il a aussi un encours de crédit. Pour le retirer de la
+    liste et de la caisse, on l'archive (is_active=False) ; tout son
+    historique reste consultable et il peut être réactivé.
+    """
+
+    objects = CustomerQuerySet.as_manager()
     
     CUSTOMER_TYPES = [
         ('particulier', 'Particulier'),
@@ -46,6 +62,10 @@ class Customer(models.Model):
     # Crédit
     credit_limit = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Limite de crédit")
     current_credit = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Crédit actuel")
+
+    # Archivage
+    is_active = models.BooleanField(default=True, verbose_name="Actif", help_text="Décoché : client archivé, masqué de la liste et de la caisse.")
+    archived_at = models.DateTimeField(null=True, blank=True, verbose_name="Archivé le")
     
     # Métadonnées
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Créé le")
@@ -66,6 +86,22 @@ class Customer(models.Model):
     def full_name(self):
         return f"{self.first_name} {self.last_name}"
     
+    def deletion_blockers(self):
+        """
+        Raisons qui interdisent de supprimer ce client (liste vide : la
+        suppression ne fait rien disparaître d'autre que sa fiche).
+        """
+        reasons = []
+        sales = self.sales.count()
+        if sales:
+            reasons.append(f"{sales} vente(s)")
+        prescriptions = self.prescriptions.count()
+        if prescriptions:
+            reasons.append(f"{prescriptions} ordonnance(s)")
+        if self.current_credit:
+            reasons.append(f"un encours de crédit de {self.current_credit:.0f} FCFA")
+        return reasons
+
     @property
     def available_credit(self):
         """Crédit disponible"""
@@ -90,7 +126,8 @@ class Sale(models.Model):
     
     # Informations de base
     sale_number = models.CharField(max_length=50, unique=True, verbose_name="Numéro de vente")
-    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, related_name='sales', verbose_name="Client")
+    # PROTECT : une vente garde son client ; il ne peut pas être supprimé.
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, null=True, blank=True, related_name='sales', verbose_name="Client")
     
     # Montants
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Sous-total")
@@ -186,7 +223,8 @@ class SaleItem(models.Model):
 class Prescription(models.Model):
     """Modèle pour les ordonnances"""
     
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='prescriptions', verbose_name="Client")
+    # PROTECT : une ordonnance n'est jamais effacée avec la fiche du client.
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name='prescriptions', verbose_name="Client")
     sale = models.OneToOneField(Sale, on_delete=models.SET_NULL, null=True, blank=True, related_name='prescription', verbose_name="Vente associée")
     
     doctor_name = models.CharField(max_length=200, verbose_name="Nom du médecin")

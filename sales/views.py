@@ -27,7 +27,8 @@ def pos_view(request):
     """Interface de Point de Vente (POS)"""
     # Seuls les médicaments en stock et non périmés sont proposés à la caisse.
     medications = Medication.objects.sellable().select_related('category')
-    customers = Customer.objects.all()
+    # Les clients archivés ne sont pas proposés à la caisse.
+    customers = Customer.objects.active()
     
     context = {
         'medications': medications,
@@ -173,8 +174,8 @@ def sale_invoice(request, pk):
 @login_required
 @permission_required('sales.view_customer', raise_exception=True)
 def customer_list(request):
-    """Liste des clients"""
-    customers = Customer.objects.all()
+    """Liste des clients actifs (les clients archivés restent dans l'admin)."""
+    customers = Customer.objects.active()
     
     search = request.GET.get('search', '')
     if search:
