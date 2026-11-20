@@ -282,6 +282,6 @@ Django et PostgreSQL ; modélisation relationnelle et migrations de données ; t
 Projet académique réalisé **en binôme** (2025), puis repris et développé par Ndeye Penda Sarr (2026).
 
 - **Ndeye Penda Sarr** — Développeuse Web Full-Stack · Business Intelligence & Data. Conception et développement de l'application ; reprise en 2026 : audit, sécurité, gestion de la concurrence, tests, intégration continue et déploiement.
-- **Alou** ([@AlouCoding](https://github.com/AlouCoding)) — binôme du projet académique ; publication et documentation (README) de la version de décembre 2025 : [AlouCoding/PharmaNPS-Alou](https://github.com/AlouCoding/PharmaNPS-Alou).
+- **Alassane Ndour** ([@AlouCoding](https://github.com/AlouCoding)) — binôme du projet académique ; publication et documentation (README) de la version de décembre 2025 : [AlouCoding/PharmaNPS-Alou](https://github.com/AlouCoding/PharmaNPS-Alou).
 
 © 2025–2026 Ndeye Penda Sarr — code sous licence [MIT](LICENSE).
