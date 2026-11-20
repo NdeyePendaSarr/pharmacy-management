@@ -28,6 +28,13 @@ def login_view(request):
         
         if user is not None:
             login(request, user)
+            # « Se souvenir de moi » : sans la case, la session s'arrête à la
+            # fermeture du navigateur (poste de caisse partagé) ; avec, elle
+            # dure SESSION_COOKIE_AGE (2 semaines par défaut).
+            if request.POST.get('remember'):
+                request.session.set_expiry(settings.SESSION_COOKIE_AGE)
+            else:
+                request.session.set_expiry(0)
             messages.success(request, f'Bienvenue {user.username} ! 👋')
             return redirect('dashboard')
         else:

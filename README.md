@@ -166,12 +166,12 @@ Chaque application a un dossier `tests/`.
 
 ## 🧪 Tests et intégration continue
 
-**172 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `pip-audit`, `check --deploy` et `makemigrations --check`. Couverture mesurée : 93 % du code (hors migrations et tests).
+**176 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `pip-audit`, `check --deploy` et `makemigrations --check`. Couverture mesurée : 93 % du code (hors migrations et tests).
 
 | Domaine | Ce qui est vérifié |
 |---|---|
 | Prix et totaux | Prix falsifié ignoré, montants exacts en Decimal et arrondis au franc CFA (paiement du montant affiché accepté, prix entiers), remise hors limites refusée, total jamais négatif, quantités entières > 0, aucune fuite de message d'erreur interne |
-| Accès | **Matrice complète** : chaque page testée en GET pour anonyme, compte sans rôle, Vendeur, Pharmacien et superutilisateur, et toute nouvelle route doit y être ajoutée ; formulaires réservés envoyés par un Vendeur refusés (403) sans aucun changement en base ; inscription fermée, 403 pour un Vendeur sur la modification ou la suppression d'un médicament, données médicales masquées, compte sans rôle bloqué, déconnexion en POST, compte de démonstration idempotent, admin : ventes, lignes et ordonnances en lecture seule et encours de crédit non modifiable, même pour un superutilisateur |
+| Accès | **Page de connexion** : « Se souvenir de moi » fixe vraiment la durée de session (fermeture du navigateur sinon), aucun lien mort ; **matrice complète** : chaque page testée en GET pour anonyme, compte sans rôle, Vendeur, Pharmacien et superutilisateur, et toute nouvelle route doit y être ajoutée ; formulaires réservés envoyés par un Vendeur refusés (403) sans aucun changement en base ; inscription fermée, 403 pour un Vendeur sur la modification ou la suppression d'un médicament, données médicales masquées, compte sans rôle bloqué, déconnexion en POST, compte de démonstration idempotent, admin : ventes, lignes et ordonnances en lecture seule et encours de crédit non modifiable, même pour un superutilisateur |
 | XSS | Un médicament nommé `</script><script>alert(1)</script>` s'affiche comme du texte au tableau de bord et à la caisse ; CSP stricte sur toutes les pages (admin comprise) : chaque script intégré porte le nonce, aucun attribut `onclick`/`onchange`, seuls les CDN autorisés, avec SRI ; un autre service `*.onrender.com` est refusé |
 | Périmés et ordonnances | Périmé absent de la caisse et refusé par le serveur, client et ordonnance exigés, ordonnance de plus de 3 mois refusée (fins de mois comprises), ordonnance liée à la vente et affichée sur la facture |
 | Stock | Sortie supérieure au stock refusée, ajustements dans les deux sens, historique égal au stock, **deux ventes, deux sorties, ou une vente et une sortie manuelle simultanées** (fils d'exécution concurrents sur PostgreSQL) |
@@ -212,7 +212,7 @@ python manage.py migrate          # crée aussi les groupes Pharmacien et Vendeu
 python manage.py createsuperuser
 python manage.py seed_data        # données de démonstration fictives (base vide uniquement)
 python manage.py runserver
-python manage.py test             # 172 tests
+python manage.py test             # 176 tests
 ```
 
 La feuille de style `static/css/output.css` est générée par Tailwind CSS à partir de `static/css/input.css` (voir `build.sh`).
@@ -277,8 +277,11 @@ Django et PostgreSQL ; modélisation relationnelle et migrations de données ; t
 
 ---
 
-## 👩‍💻 Auteure
+## 👥 Équipe
 
-**Ndeye Penda Sarr** — Développeuse Web Full-Stack · Business Intelligence & Data
+Projet académique réalisé **en binôme** (2025), puis repris et développé par Ndeye Penda Sarr (2026).
+
+- **Ndeye Penda Sarr** — Développeuse Web Full-Stack · Business Intelligence & Data. Conception et développement de l'application ; reprise en 2026 : audit, sécurité, gestion de la concurrence, tests, intégration continue et déploiement.
+- **Alou** ([@AlouCoding](https://github.com/AlouCoding)) — binôme du projet académique ; publication et documentation (README) de la version de décembre 2025 : [AlouCoding/PharmaNPS-Alou](https://github.com/AlouCoding/PharmaNPS-Alou).
 
 © 2025–2026 Ndeye Penda Sarr
