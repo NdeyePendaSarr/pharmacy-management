@@ -1,6 +1,6 @@
 # 💊 PharmaNPS-Alou — Gestion de pharmacie
 
-[![CI](https://github.com/NdeyePendaSarr/pharmacy-management/actions/workflows/ci.yml/badge.svg)](https://github.com/NdeyePendaSarr/pharmacy-management/actions/workflows/ci.yml)
+[![CI](https://github.com/NdeyePendaSarr/pharmacy-management/actions/workflows/ci.yml/badge.svg)](https://github.com/NdeyePendaSarr/pharmacy-management/actions/workflows/ci.yml) [![Licence : MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
 > Application web de gestion d'une pharmacie : **stock des médicaments**, **caisse**, **clients**, **ordonnances**, **facturation** et **suivi de l'activité commerciale**.
 
@@ -284,4 +284,4 @@ Projet académique réalisé **en binôme** (2025), puis repris et développé p
 - **Ndeye Penda Sarr** — Développeuse Web Full-Stack · Business Intelligence & Data. Conception et développement de l'application ; reprise en 2026 : audit, sécurité, gestion de la concurrence, tests, intégration continue et déploiement.
 - **Alou** ([@AlouCoding](https://github.com/AlouCoding)) — binôme du projet académique ; publication et documentation (README) de la version de décembre 2025 : [AlouCoding/PharmaNPS-Alou](https://github.com/AlouCoding/PharmaNPS-Alou).
 
-© 2025–2026 Ndeye Penda Sarr
+© 2025–2026 Ndeye Penda Sarr — code sous licence [MIT](LICENSE).
