@@ -71,6 +71,7 @@ La quantité d'un mouvement est toujours positive, le sens vient de son type. Un
 
 ### 🛒 Caisse
 - Recherche instantanée par nom, DCI ou code-barres ; les médicaments **périmés** ou épuisés ne sont pas proposés.
+- Client cherché **à la demande** par nom, prénom ou téléphone (2 caractères minimum, 10 résultats, clients archivés exclus), au clavier comme à la souris ; sans client choisi, la vente est anonyme.
 - Remise de 0 à 20 % ; paiement en espèces (monnaie rendue calculée), carte, mobile money ou **crédit**.
 - Médicament **sur ordonnance** : la vente exige un client et une ordonnance (médecin, date de prescription **de moins de 3 mois**), enregistrée, liée à la vente et rappelée sur la fiche de vente et la facture.
 - Facture imprimable.
@@ -165,7 +166,7 @@ Chaque application a un dossier `tests/`.
 
 ## 🧪 Tests et intégration continue
 
-**163 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `pip-audit`, `check --deploy` et `makemigrations --check`. Couverture mesurée : 93 % du code (hors migrations et tests).
+**172 tests automatisés** (`python manage.py test`), lancés par GitHub Actions à chaque push et pull request avec une vraie base PostgreSQL, après `pip-audit`, `check --deploy` et `makemigrations --check`. Couverture mesurée : 93 % du code (hors migrations et tests).
 
 | Domaine | Ce qui est vérifié |
 |---|---|
@@ -181,6 +182,7 @@ Chaque application a un dossier `tests/`.
 | Performance | Tableau de bord en 9 requêtes, quel que soit le volume (`assertNumQueries`) ; listes des ventes, clients, médicaments et catégories en un nombre de requêtes constant ; pagination qui garde recherche et filtres |
 | Déploiement | `init_admin` et `seed_data` reconstruisent la démo sur une base vide, sans doublon s'ils sont relancés |
 | Clients | Suppression d'un client avec ventes, ordonnances ou crédit refusée (code et admin, message explicite), fiche sans historique supprimable, archivage et réactivation, client archivé masqué et refusé à la caisse, migration 0006 appliquée puis défaite sans perte |
+| Caisse | Clients cherchés à la demande : par nom, prénom ou téléphone, clients archivés exclus, 10 résultats au plus, aucune donnée médicale renvoyée, droits de la caisse exigés ; la page de caisse n'embarque plus aucun client et son nombre de requêtes ne dépend pas du nombre de clients |
 
 Les tests de concurrence nécessitent PostgreSQL ; ils sont ignorés avec SQLite.
 
@@ -210,7 +212,7 @@ python manage.py migrate          # crée aussi les groupes Pharmacien et Vendeu
 python manage.py createsuperuser
 python manage.py seed_data        # données de démonstration fictives (base vide uniquement)
 python manage.py runserver
-python manage.py test             # 163 tests
+python manage.py test             # 172 tests
 ```
 
 La feuille de style `static/css/output.css` est générée par Tailwind CSS à partir de `static/css/input.css` (voir `build.sh`).
@@ -252,7 +254,7 @@ La base n'est plus une base Render gratuite (elle expire au bout de quelques sem
 
 - Les **points de fidélité** sont enregistrés et affichés, mais aucune règle ne les attribue encore.
 - Le statut de vente « annulée » existe, mais il n'y a pas encore de parcours d'annulation ni de remise en stock.
-- La caisse charge encore d'un coup tous les médicaments vendables et tous les clients (les autres listes sont paginées).
+- La caisse charge encore d'un coup tous les médicaments vendables (les clients sont cherchés à la demande, les autres listes sont paginées).
 
 ## 🔮 Pistes d'amélioration
 

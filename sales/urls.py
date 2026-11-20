@@ -7,6 +7,7 @@ urlpatterns = [
     # Point de vente
     path('pos/', views.pos_view, name='pos'),
     path('api/search-medication/', views.search_medication, name='search_medication'),
+    path('api/search-customer/', views.search_customer, name='search_customer'),
     path('api/create-sale/', views.create_sale, name='create_sale'),
     
     # Ventes

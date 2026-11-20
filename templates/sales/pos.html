@@ -121,15 +121,23 @@
             
             <!-- Client -->
             <div class="mb-4">
-                <label for="customerSelect" class="block text-sm font-bold text-gray-700 mb-2">
+                <label for="customerSearch" class="block text-sm font-bold text-gray-700 mb-2">
                     <i class="fas fa-user mr-2 text-purple-500"></i>Client
                 </label>
-                <select id="customerSelect" class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all shadow-lg">
-                    <option value="">👤 Client anonyme</option>
-                    {% for customer in customers %}
-                    <option value="{{ customer.id }}">{{ customer.full_name }} - {{ customer.phone }}</option>
-                    {% endfor %}
-                </select>
+                <!-- Client choisi (vide : client anonyme). Les clients sont cherchés à la demande. -->
+                <input type="hidden" id="customerSelect" value="">
+                <div id="customerChosen" class="hidden mb-2 flex items-center justify-between gap-2 bg-purple-50 border-2 border-purple-200 rounded-xl px-3 py-2">
+                    <span id="customerChosenName" class="text-sm font-bold text-purple-900"></span>
+                    <button type="button" id="customerClear" class="text-sm text-purple-700 underline font-semibold">Retirer</button>
+                </div>
+                <div class="relative">
+                    <input type="search" id="customerSearch" autocomplete="off"
+                           placeholder="👤 Client anonyme — tapez un nom ou un téléphone"
+                           aria-describedby="customerSearchHelp" aria-controls="customerResults"
+                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all shadow-lg">
+                    <ul id="customerResults" class="hidden absolute z-20 w-full mt-1 bg-white border-2 border-gray-200 rounded-xl shadow-xl max-h-64 overflow-y-auto" aria-label="Clients trouvés"></ul>
+                </div>
+                <p id="customerSearchHelp" class="text-xs text-gray-600 mt-1" aria-live="polite">Au moins 2 caractères. Laissez vide pour un client anonyme.</p>
             </div>
 
             <!-- Ordonnance : affichée seulement si le panier contient un médicament sur prescription -->
@@ -290,6 +298,122 @@ function clearMessage() {
     posMessage.classList.add('hidden');
     posMessage.replaceChildren();
 }
+
+// Client : recherche à la demande (/api/search-customer/) au lieu d'une
+// liste de tous les clients dans la page. Le client choisi est gardé dans
+// le champ caché #customerSelect, lu à la validation de la vente.
+const customerSelect = document.getElementById('customerSelect');
+const customerSearch = document.getElementById('customerSearch');
+const customerResults = document.getElementById('customerResults');
+const customerHelp = document.getElementById('customerSearchHelp');
+const customerChosen = document.getElementById('customerChosen');
+const customerChosenName = document.getElementById('customerChosenName');
+const CUSTOMER_HELP = customerHelp.textContent;
+let customerTimer = null;
+let customerQuery = '';
+
+function hideCustomerResults() {
+    customerResults.classList.add('hidden');
+    customerResults.replaceChildren();
+}
+
+function chooseCustomer(customer) {
+    customerSelect.value = customer.id;
+    customerChosenName.textContent = `${customer.name} – ${customer.phone}`;
+    customerChosen.classList.remove('hidden');
+    customerSearch.value = '';
+    hideCustomerResults();
+    customerHelp.textContent = `Client choisi : ${customer.name}.`;
+}
+
+function clearCustomer() {
+    customerSelect.value = '';
+    customerChosen.classList.add('hidden');
+    customerChosenName.textContent = '';
+    customerHelp.textContent = CUSTOMER_HELP;
+}
+
+function renderCustomerResults(results) {
+    if (results.length === 0) {
+        customerResults.replaceChildren(el('li', 'px-4 py-3 text-sm text-gray-500', 'Aucun client trouvé'));
+    } else {
+        customerResults.replaceChildren(...results.map((customer) => {
+            const item = el('li');
+            const button = el('button', 'w-full text-left px-4 py-3 hover:bg-purple-50 focus:bg-purple-50 focus:outline-none border-b border-gray-100');
+            button.type = 'button';
+            button.append(el('span', 'block text-sm font-bold text-gray-900', customer.name), el('span', 'block text-xs text-gray-600', customer.phone));
+            button.addEventListener('click', () => chooseCustomer(customer));
+            item.append(button);
+            return item;
+        }));
+    }
+    customerResults.classList.remove('hidden');
+    customerHelp.textContent = results.length === 0 ? 'Aucun client trouvé.' : `${results.length} client(s) trouvé(s).`;
+}
+
+customerSearch.addEventListener('input', () => {
+    clearTimeout(customerTimer);
+    const query = customerSearch.value.trim();
+    if (query.length < 2) {
+        hideCustomerResults();
+        customerHelp.textContent = CUSTOMER_HELP;
+        return;
+    }
+    // Petite attente pour ne pas interroger le serveur à chaque touche.
+    customerTimer = setTimeout(async () => {
+        customerQuery = query;
+        try {
+            const response = await fetch(`/api/search-customer/?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            // Une réponse plus ancienne que la dernière saisie est ignorée.
+            if (query === customerQuery && query === customerSearch.value.trim()) {
+                renderCustomerResults(data.results);
+            }
+        } catch (error) {
+            customerHelp.textContent = 'Recherche impossible pour le moment.';
+            console.error(error);
+        }
+    }, 250);
+});
+
+customerSearch.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        hideCustomerResults();
+    } else if (e.key === 'ArrowDown') {
+        const first = customerResults.querySelector('button');
+        if (first) {
+            e.preventDefault();
+            first.focus();
+        }
+    }
+});
+
+customerResults.addEventListener('keydown', (e) => {
+    const buttons = [...customerResults.querySelectorAll('button')];
+    const index = buttons.indexOf(document.activeElement);
+    if (index === -1) return;
+    if (e.key === 'ArrowDown' && index < buttons.length - 1) {
+        e.preventDefault();
+        buttons[index + 1].focus();
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        (index > 0 ? buttons[index - 1] : customerSearch).focus();
+    } else if (e.key === 'Escape') {
+        hideCustomerResults();
+        customerSearch.focus();
+    }
+});
+
+document.getElementById('customerClear').addEventListener('click', () => {
+    clearCustomer();
+    customerSearch.focus();
+});
+
+document.addEventListener('click', (e) => {
+    if (!customerSearch.contains(e.target) && !customerResults.contains(e.target)) {
+        hideCustomerResults();
+    }
+});
 
 const searchInput = document.getElementById('searchInput');
 const searchResults = document.getElementById('searchResults');
@@ -616,7 +740,7 @@ completeBtn.addEventListener('click', async () => {
             cart = [];
             document.getElementById('discountInput').value = 0;
             document.getElementById('amountPaid').value = '';
-            document.getElementById('customerSelect').value = '';
+            clearCustomer();
             document.getElementById('doctorName').value = '';
             document.getElementById('prescriptionDate').value = '';
             updateCart();

@@ -137,7 +137,8 @@ class ArchiveTests(TestCase):
         self.client.force_login(vendeur)
         # Masqué de la liste et de la caisse…
         self.assertNotIn(self.customer, self.client.get(reverse("customer_list")).context["customers"])
-        self.assertNotIn(self.customer, self.client.get(reverse("pos")).context["customers"])
+        found = self.client.get(reverse("search_customer"), {"q": "Archivable"}).json()["results"]
+        self.assertEqual(found, [])
         # …mais sa fiche et ses ventes restent consultables.
         detail = self.client.get(reverse("customer_detail", args=[self.customer.pk]))
         self.assertContains(detail, "Client archivé le")
