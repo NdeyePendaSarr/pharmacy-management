@@ -29,6 +29,11 @@
             <div class="pb-2 md:pb-4">
                 <h1 class="text-2xl md:text-4xl font-extrabold text-gray-900 mb-1 md:mb-2">{{ customer.full_name }}</h1>
                 <div class="flex items-center gap-3">
+                    {% if not customer.is_active %}
+                    <span class="bg-gray-200 text-gray-800 px-3 py-1 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold">
+                        <i class="fas fa-archive mr-1" aria-hidden="true"></i>Client archivé le {{ customer.archived_at|date:"d/m/Y" }}
+                    </span>
+                    {% endif %}
                     <span class="{% if customer.customer_type == 'particulier' %}bg-blue-100 text-blue-800{% elif customer.customer_type == 'entreprise' %}bg-green-100 text-green-800{% else %}bg-orange-100 text-orange-800{% endif %} px-3 py-1 md:px-4 md:py-2 rounded-xl text-xs md:text-sm font-bold">
                         <i class="fas fa-{% if customer.customer_type == 'particulier' %}user{% elif customer.customer_type == 'entreprise' %}building{% else %}shield-alt{% endif %} mr-2"></i>
                         {{ customer.get_customer_type_display }}

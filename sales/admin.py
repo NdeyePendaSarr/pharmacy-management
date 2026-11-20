@@ -1,4 +1,9 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.contrib.admin.utils import unquote
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.utils import timezone
+
 from .models import Customer, Sale, SaleItem, Prescription
 
 
@@ -31,12 +36,52 @@ class SaleItemInline(ReadOnlyAdminMixin, admin.TabularInline):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ('full_name', 'phone', 'customer_type', 'loyalty_points', 'current_credit', 'credit_limit')
-    list_filter = ('customer_type',)
+    list_display = ('full_name', 'phone', 'customer_type', 'loyalty_points', 'current_credit', 'credit_limit', 'is_active')
+    list_filter = ('is_active', 'customer_type')
     search_fields = ('first_name', 'last_name', 'phone', 'email')
     # L'encours de crédit n'évolue que par les ventes à crédit (caisse) :
     # le modifier à la main effacerait ou inventerait une dette.
-    readonly_fields = ('current_credit',)
+    # L'archivage passe par les actions « Archiver » / « Réactiver ».
+    readonly_fields = ('current_credit', 'is_active', 'archived_at')
+    actions = ['archive_customers', 'reactivate_customers']
+
+    def get_actions(self, request):
+        # Pas de suppression groupée : elle contournerait le contrôle client
+        # par client de delete_view.
+        actions = super().get_actions(request)
+        actions.pop('delete_selected', None)
+        return actions
+
+    @admin.action(description="Archiver les clients sélectionnés (historique conservé)", permissions=['change'])
+    def archive_customers(self, request, queryset):
+        count = queryset.filter(is_active=True).update(is_active=False, archived_at=timezone.now())
+        self.message_user(
+            request,
+            f"{count} client(s) archivé(s) : masqués de la liste et de la caisse, ventes, ordonnances et crédit conservés.",
+            messages.SUCCESS,
+        )
+
+    @admin.action(description="Réactiver les clients sélectionnés", permissions=['change'])
+    def reactivate_customers(self, request, queryset):
+        count = queryset.filter(is_active=False).update(is_active=True, archived_at=None)
+        self.message_user(request, f"{count} client(s) réactivé(s).", messages.SUCCESS)
+
+    def delete_view(self, request, object_id, extra_context=None):
+        # Un client avec un historique n'est jamais supprimé : on explique
+        # pourquoi et on propose l'archivage, au lieu d'une erreur brute.
+        customer = self.get_object(request, unquote(object_id))
+        if customer is not None:
+            reasons = customer.deletion_blockers()
+            if reasons:
+                self.message_user(
+                    request,
+                    f"Impossible de supprimer « {customer.full_name} » : ce client a {', '.join(reasons)}. "
+                    "Son historique doit être conservé. Utilisez l'action « Archiver » pour le retirer "
+                    "de la liste et de la caisse.",
+                    messages.ERROR,
+                )
+                return redirect(reverse('admin:sales_customer_change', args=[customer.pk]))
+        return super().delete_view(request, object_id, extra_context)
 
 
 @admin.register(Sale)
